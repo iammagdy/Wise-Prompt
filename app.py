@@ -28,6 +28,7 @@ st.markdown("""
     .stButton button:hover { background-color: #2EA043; }
     h1, h2, h3 { font-family: 'Courier New', monospace; color: #E6EDF3; }
     .metric-container { background-color: #0D1117; border: 1px solid #30363D; padding: 10px; border-radius: 5px; }
+    div[data-testid="stMarkdownContainer"] p { font-size: 1.1em; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -163,7 +164,7 @@ with st.sidebar:
     api_key = st.text_input("API KEY", type="password")
     st.divider()
     
-    # --- NEW MODEL SELECTOR ---
+    # NEW MODEL SELECTOR
     model_options = [
         "gemini-2.0-flash-exp", 
         "gemini-3-pro-preview", 
@@ -206,17 +207,110 @@ genai.configure(api_key=api_key)
 
 tab1, tab2, tab3 = st.tabs(["✨ PROMPT ENGINEER", "🕷️ DEEP CRAWLER", "👁️ VISION REPLICATOR"])
 
-# --- TAB 1: PROMPT ENHANCER ---
+# ==========================================
+# TAB 1: PROMPT ENHANCER (Full Features)
+# ==========================================
 with tab1:
     st.header("✨ Active Reasoning Engine")
-    mode = st.selectbox("STRATEGY", ["✨ Auto-Detect", "⚡ Vibe Coder", "CO-STAR", "Chain of Thought"])
-    raw_prompt = st.text_area("INPUT PROMPT", height=150)
-    if st.button("🚀 ENHANCE"):
-        with st.spinner("PROCESSING..."):
-            res = generate_with_fallback(model_name, f"Enhance this prompt using {mode}: {raw_prompt}")
-            if res: st.code(res.text, language='markdown')
+    
+    # 1. STRATEGY SELECTOR
+    mode = st.selectbox(
+        "STRATEGY", 
+        [
+            "✨ Auto-Detect (AI Decides)", 
+            "⚡ Vibe Coder (Bolt/Antigravity)", 
+            "CO-STAR (General Writing)", 
+            "Chain of Thought (Logic)", 
+            "Senior Coder (Python/JS)",
+            "Email Polisher",
+            "S.M.A.R.T. (Business)",
+            "The 5 Ws (Reporting)",
+            "Custom Persona"
+        ]
+    )
+    
+    # 2. SUB-OPTIONS
+    vibe_type = "Genesis (New Project)" 
+    agent_name = "Expert"
 
-# --- TAB 2: CRAWL & CHAT ---
+    if mode == "⚡ Vibe Coder (Bolt/Antigravity)":
+        st.info("💡 Adds 'Few-Shot Examples' to teach the Agent standard coding practices.")
+        vibe_type = st.radio("STAGE?", ["Genesis (Start New)", "Refiner (Polish UI)", "Logic Fixer (Debug)"], horizontal=True)
+    
+    elif mode == "Custom Persona":
+        agent_name = st.text_input("WHO IS THE AGENT?", placeholder="e.g. Steve Jobs, Senior Lawyer")
+
+    # 3. INPUT
+    raw_prompt = st.text_area("INPUT PROMPT", height=150, placeholder="e.g. Build a dashboard... OR Write a refund email...")
+    
+    # 4. EXECUTION
+    if st.button("🚀 ENHANCE PROMPT", type="primary"):
+        if not raw_prompt:
+            st.warning("INPUT REQUIRED")
+        else:
+            with st.spinner("OPTIMIZING..."):
+                
+                system_instruction = ""
+                
+                # A. Vibe Coder Logic
+                if mode == "⚡ Vibe Coder (Bolt/Antigravity)":
+                    if "Genesis" in vibe_type:
+                        system_instruction = f"""
+                        Act as an Expert Prompt Engineer for AI Agents (Bolt.new).
+                        Rewrite this into a 'Genesis Prompt' using CO-STAR.
+                        CRITICAL: Append a '### FEW-SHOT TRAINING' section with 'Bad Output' vs 'Good Output' (Next.js/Tailwind).
+                        INPUT: "{raw_prompt}"
+                        """
+                    elif "Refiner" in vibe_type:
+                        system_instruction = f"""
+                        Act as a UI/UX Director. Rewrite into a 'Refiner Prompt'.
+                        CRITICAL: Append a '### FEW-SHOT TRAINING' section (e.g. 'Make it pop' -> 'shadow-xl').
+                        INPUT: "{raw_prompt}"
+                        """
+                    elif "Logic" in vibe_type:
+                        system_instruction = f"""
+                        Act as a Senior Backend Engineer. Rewrite into a 'Logic Fixer Prompt'.
+                        CRITICAL: Append a '### FEW-SHOT TRAINING' section about Error Handling.
+                        INPUT: "{raw_prompt}"
+                        """
+
+                # B. Auto-Detect Logic
+                elif mode == "✨ Auto-Detect (AI Decides)":
+                    system_instruction = f"""
+                    Analyze: "{raw_prompt}".
+                    1. Detect the intent (Code, Email, Logic, or Planning?).
+                    2. Rewrite it using the BEST framework for that intent.
+                    3. Output ONLY the rewritten prompt.
+                    """
+
+                # C. Specific Frameworks
+                elif mode == "CO-STAR (General Writing)":
+                    system_instruction = f"Rewrite using CO-STAR (Context, Objective, Style, Tone, Audience, Response). INPUT: '{raw_prompt}'"
+                elif mode == "Chain of Thought (Logic)":
+                    system_instruction = f"Rewrite to force step-by-step reasoning. INPUT: '{raw_prompt}'"
+                elif mode == "Senior Coder (Python/JS)":
+                    system_instruction = f"Rewrite as a Technical Spec for a Senior Architect. INPUT: '{raw_prompt}'"
+                elif mode == "Email Polisher":
+                    system_instruction = f"Rewrite as a Professional Corporate Email. INPUT: '{raw_prompt}'"
+                elif mode == "S.M.A.R.T. (Business)":
+                    system_instruction = f"Rewrite as S.M.A.R.T Goals (Specific, Measurable, Achievable, Relevant, Time-bound). INPUT: '{raw_prompt}'"
+                elif mode == "The 5 Ws (Reporting)":
+                    system_instruction = f"Rewrite to answer Who, What, Where, When, Why. INPUT: '{raw_prompt}'"
+                elif mode == "Custom Persona":
+                    system_instruction = f"Act as {agent_name}. Rewrite exactly how they would speak. INPUT: '{raw_prompt}'"
+
+                # D. FINAL FORMATTING INSTRUCTION
+                system_instruction += "\n\nOUTPUT FORMAT: Provide the final result in Markdown. Use a code block for the main prompt text so it is copyable."
+
+                res = generate_with_fallback(model_name, system_instruction)
+                
+                if res:
+                    st.success("✅ OPTIMIZATION COMPLETE")
+                    st.markdown(res.text)
+
+# ==========================================
+# TAB 2: CRAWL & CHAT (Deep Net Scanner)
+# ==========================================
 with tab2:
     st.header("🕷️ Deep Net Scanner")
     
@@ -302,7 +396,9 @@ with tab2:
         with st.expander("📦 RAW DATA EXPORT"):
             st.download_button("DOWNLOAD JSON", st.session_state.knowledge_base, file_name="scan_data.json")
 
-# --- TAB 3: VISION REPLICATOR ---
+# ==========================================
+# TAB 3: VISION REPLICATOR
+# ==========================================
 with tab3:
     st.header("👁️ Vision Replicator")
     st.info("Upload a screenshot to replicate the design pixel-perfectly.")
@@ -321,4 +417,4 @@ with tab3:
                 img = Image.open(uploaded_file)
                 prompt = f"Act as a Senior Frontend Dev. Write a system prompt to build this exact UI using {stack}. Vibe: {vibe}."
                 res = generate_with_fallback(model_name, prompt, image=img)
-                if res: st.code(res.text, language='markdown')
+                if res: st.markdown(res.text)
