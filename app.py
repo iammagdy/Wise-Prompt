@@ -10,7 +10,7 @@ import os
 from datetime import datetime
 from urllib.parse import urljoin, urlparse
 
-# --- 1. PAGE CONFIG & RESPONSIVE CYBERPUNK CSS ---
+# --- 1. PAGE CONFIG & RESPONSIVE CSS ---
 st.set_page_config(
     page_title="God-Mode: Wise AI",
     page_icon="⚡",
@@ -38,6 +38,16 @@ st.markdown("""
     /* Headers */
     h1, h2, h3 { font-family: 'Courier New', monospace; color: #E6EDF3; }
     
+    /* --- OUTPUT CONSOLE STYLING --- */
+    .output-console {
+        border: 2px solid #00FF94;
+        border-radius: 10px;
+        padding: 15px;
+        background-color: #161B22;
+        margin-top: 20px;
+        box-shadow: 0 0 20px rgba(0, 255, 148, 0.1);
+    }
+    
     /* --- MOBILE OPTIMIZATIONS --- */
     @media only screen and (max-width: 600px) {
         .block-container { padding-top: 1rem; padding-left: 0.5rem; padding-right: 0.5rem; }
@@ -48,7 +58,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# --- 2. PERSISTENCE LAYER (HISTORY) ---
+# --- 2. PERSISTENCE LAYER ---
 HISTORY_FILE = "god_mode_history.json"
 
 def load_history_db():
@@ -102,6 +112,17 @@ def generate_with_fallback(user_model_name, prompt, image=None):
         else:
             st.error(f"❌ Error: {e}")
             return None
+
+def render_output_console(content):
+    """Renders the output in a dedicated screen-like container with a copy button."""
+    st.markdown("---")
+    # This container acts as the "Output Screen"
+    with st.container(border=True):
+        st.markdown("### 📡 MISSION OUTPUT")
+        st.caption("👇 Tap the Copy Icon (📄) in the top-right corner of the code block below.")
+        # st.code automatically provides a copy button on hover/tap
+        st.code(content, language="markdown")
+        st.success("✅ Generation Complete. Ready to Copy.")
 
 def recursive_crawl(start_url, max_pages=5):
     visited = set()
@@ -211,7 +232,7 @@ genai.configure(api_key=api_key)
 tab1, tab2, tab3, tab4 = st.tabs(["✨ PROMPT ARCHITECT", "🕷️ DEEP NET SCANNER", "👁️ VISION REPLICATOR", "📜 HISTORY"])
 
 # ==========================================
-# TAB 1: PROMPT ARCHITECT (SUPER-CHARGED V17)
+# TAB 1: PROMPT ARCHITECT (WITH OUTPUT SCREEN)
 # ==========================================
 with tab1:
     st.header("✨ The Architect Engine")
@@ -257,80 +278,48 @@ with tab1:
             with st.spinner("Architecting Super-Prompt..."):
                 system_instruction = ""
                 
-                # --- 1. VIBE CODER (GOD-MODE INJECTION) ---
+                # --- 1. VIBE CODER ---
                 if mode == "⚡ Vibe Coder (Bolt/Antigravity)":
                     system_instruction = f"""
                     You are the "Vibe Coder" Architect.
                     USER REQUEST: "{raw_prompt}"
                     FRAMEWORK: {vibe_type}
-
-                    YOUR TASK:
-                    Write a "God-Mode" System Prompt for an AI Developer (Bolt.new/Cursor).
-                    You must NOT just repeat the user's request. You must EXPAND it into a production spec.
-
+                    YOUR TASK: Write a "God-Mode" System Prompt for an AI Developer.
                     STRICT OUTPUT STRUCTURE (Markdown):
                     # 1. Role
-                    Act as a Senior [React/Python] Architect.
-
-                    # 2. Project & Tech Stack (You MUST invent this)
-                    * Framework: [e.g. React + Vite]
-                    * Styling: [e.g. Tailwind CSS]
-                    * State: [e.g. Zustand/Context]
-                    * Icons: [e.g. Lucide-React]
-                    * Animation: [e.g. Framer Motion]
-
-                    # 3. Core Features (Functional Requirements)
-                    [List 5-7 advanced features. e.g. if 'Todo App', add 'Categories', 'Priority Tags', 'Local Storage Persistence'.]
-
-                    # 4. UI/UX & "Vibe" (Non-Functional)
-                    [Define the design system. e.g. "Glassmorphism", "Rounded Corners", "Smooth Transitions".]
-
+                    # 2. Project & Tech Stack (Invent modern stack)
+                    # 3. Core Features (Functional)
+                    # 4. UI/UX & "Vibe"
                     # 5. Component Architecture
-                    [List the key components e.g. <Navbar />, <TaskCard />]
-
                     # 6. FEW-SHOT TRAINING (Crucial)
-                    [Provide a 'Bad Code' vs 'Good Code' example relevant to this stack.]
                     """
 
-                # --- 2. SUPER SYSTEM (GOD-MODE INJECTION) ---
+                # --- 2. SUPER SYSTEM ---
                 elif mode == "🧠 Super-System (The Architect)":
                     system_instruction = f"""
                     You are the World's Greatest Prompt Architect.
                     USER INPUT: "{raw_prompt}"
                     INTENSITY: {complexity}
-
                     GOAL: Transform this into a massive, world-class "System Protocol".
-                    
                     STRICT OUTPUT STRUCTURE (Markdown):
                     # 1. MISSION PROFILE
-                    **Role:** [Define precise persona]
-                    **Objective:** [Success State]
-                    **Context:** [Why?]
-
                     # 2. STRATEGIC PROTOCOL
-                    [Step-by-Step execution plan. Be algorithmic.]
-
                     # 3. KNOWLEDGE BASE & BEST PRACTICES (Crucial)
-                    [List 5-7 expert principles. Hallucinate these based on the domain. e.g. "Prioritize Tufte's data-ink ratio" or "Use Clean Code principles".]
-
                     # 4. CONSTRAINTS & GUARDRAILS
-                    [What must the AI NOT do?]
-
                     # 5. OUTPUT FORMATTING
-                    [Exact format definition]
                     """
 
                 # --- 3. AUTO DETECT ---
                 elif mode == "✨ Auto-Detect (AI Decides)":
                     system_instruction = f"""
                     Analyze: "{raw_prompt}".
-                    1. Detect the intent (Code? Writing? Logic?).
-                    2. If Code, write a full 'Vibe Coder' spec with Tech Stack and UI rules.
-                    3. If Writing/Logic, write a full 'Super-System' protocol.
-                    4. Output ONLY the optimized prompt.
+                    1. Detect the intent.
+                    2. If Code, write a 'Vibe Coder' spec.
+                    3. If Logic/Writing, write a 'Super-System' protocol.
+                    4. Output ONLY the optimized prompt in Markdown.
                     """
 
-                # --- 4. OTHER MODES ---
+                # --- 4. OTHERS ---
                 elif mode == "CO-STAR (General Writing)":
                     system_instruction = f"Rewrite using CO-STAR. INPUT: '{raw_prompt}'"
                 elif mode == "Custom Persona":
@@ -338,15 +327,14 @@ with tab1:
                 else:
                     system_instruction = f"Rewrite professionally using {mode}. INPUT: '{raw_prompt}'"
 
-                # Execute
                 res = generate_with_fallback(model_name, system_instruction)
                 if res: 
-                    st.success("✅ Architecture Complete")
-                    st.markdown(res.text)
+                    # USE THE NEW OUTPUT SCREEN
+                    render_output_console(res.text)
                     add_to_history(api_key, f"Prompt Architect ({mode})", raw_prompt, res.text)
 
 # ==========================================
-# TAB 2: DEEP NET SCANNER (FULL)
+# TAB 2: DEEP NET SCANNER (WITH OUTPUT SCREEN)
 # ==========================================
 with tab2:
     st.header("🕷️ Deep Net Scanner")
@@ -411,7 +399,7 @@ with tab2:
             st.download_button("DOWNLOAD JSON", st.session_state.knowledge_base, file_name="scan_data.json")
 
 # ==========================================
-# TAB 3: VISION REPLICATOR
+# TAB 3: VISION REPLICATOR (WITH OUTPUT SCREEN)
 # ==========================================
 with tab3:
     st.header("👁️ Vision Replicator")
@@ -428,7 +416,8 @@ with tab3:
                 prompt = f"Act as Senior Frontend Dev. Write system prompt to build this exact UI using {stack}. Vibe: {vibe}."
                 res = generate_with_fallback(model_name, prompt, image=img)
                 if res: 
-                    st.markdown(res.text)
+                    # USE THE NEW OUTPUT SCREEN
+                    render_output_console(res.text)
                     add_to_history(api_key, "Vision Replicator", f"Image Upload: {stack}", res.text)
 
 # ==========================================
