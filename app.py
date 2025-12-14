@@ -11,10 +11,11 @@ with st.sidebar:
     st.header("⚙️ Settings")
     api_key = st.text_input("Paste Gemini API Key:", type="password")
     
-    # NEW: Mode Selector
+    # Mode Selector
     mode = st.radio("Select Mode:", ["✨ Text Prompt Enhancer", "🕷️ Website Replicator"])
     
     st.markdown("---")
+    # Debugger to find your working model name
     if st.button("🐞 Check Available Models"):
         if not api_key:
             st.error("Paste API key first!")
@@ -35,8 +36,13 @@ if not api_key:
     st.warning("⬅️ Please paste your Gemini API Key in the sidebar to start.")
     st.stop()
 
+# Configure the API key globally
 genai.configure(api_key=api_key)
-model = genai.GenerativeModel('gemini-1.5-flash') # Or 'gemini-pro' if flash fails
+
+# GLOBAL MODEL SELECTOR
+# This box lets you type the name that ACTUALLY works for you (e.g., gemini-pro)
+st.info("If you get a 404 error, use the 'Check Available Models' button in the sidebar and paste a valid name below.")
+user_model_name = st.text_input("Model Name:", value="gemini-1.5-flash")
 
 # ==========================================
 # MODE 1: STANDARD PROMPT ENHANCER
@@ -44,12 +50,7 @@ model = genai.GenerativeModel('gemini-1.5-flash') # Or 'gemini-pro' if flash fai
 if mode == "✨ Text Prompt Enhancer":
     st.subheader("Turn lazy ideas into engineering-grade prompts.")
     
-    col1, col2 = st.columns(2)
-    with col1:
-        framework = st.selectbox("Style:", ["CO-STAR (Best for Text)", "Chain of Thought (Logic)", "Python Expert (Code)"])
-    with col2:
-        model_name = st.text_input("Model Name (Optional):", value="gemini-1.5-flash")
-
+    framework = st.selectbox("Style:", ["CO-STAR (Best for Text)", "Chain of Thought (Logic)", "Python Expert (Code)"])
     raw_prompt = st.text_area("Your Lazy Draft:", height=200, placeholder="e.g., write a marketing plan for coffee...")
 
     if st.button("✨ Enhance Prompt", type="primary"):
@@ -57,7 +58,8 @@ if mode == "✨ Text Prompt Enhancer":
             st.warning("Enter a prompt first.")
         else:
             try:
-                if model_name: model = genai.GenerativeModel(model_name)
+                # USE THE USER'S MODEL NAME
+                model = genai.GenerativeModel(user_model_name)
                 
                 with st.spinner("Engineering your prompt..."):
                     meta_prompts = {
@@ -84,7 +86,7 @@ if mode == "✨ Text Prompt Enhancer":
                 st.error(f"Error: {e}")
 
 # ==========================================
-# MODE 2: WEBSITE REPLICATOR (NEW!)
+# MODE 2: WEBSITE REPLICATOR
 # ==========================================
 elif mode == "🕷️ Website Replicator":
     st.subheader("Clone a website's style and structure.")
@@ -97,42 +99,17 @@ elif mode == "🕷️ Website Replicator":
             st.warning("Please enter a URL.")
         else:
             try:
-                with st.spinner("🕷️ Crawling website content... (This might take 10s)"):
+                with st.spinner("🕷️ Crawling website content..."):
                     # 1. Scrape the website
-                    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
+                    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/91.0.4472.124 Safari/537.36'}
                     page = requests.get(target_url, headers=headers, timeout=10)
                     soup = BeautifulSoup(page.content, 'html.parser')
                     
-                    # Get text (limit to 10,000 chars to fit in memory)
+                    # Get text (limit to 10,000 chars)
                     site_text = soup.get_text(separator=' ', strip=True)[:10000]
                     
                 with st.spinner("🧠 Analyzing design & structure..."):
-                    # 2. Ask Gemini to analyze it
+                    # 2. USE THE USER'S MODEL NAME (This was the fix!)
+                    model = genai.GenerativeModel(user_model_name)
+                    
                     analysis_prompt = f"""
-                    Act as a Senior UI/UX Designer and Frontend Developer.
-                    I have scraped the text content of a website below.
-                    
-                    YOUR TASK:
-                    Write a comprehensive "System Prompt" that I can give to an AI coding agent (like Cursor, v0, or ChatGPT) to REPLICATE this website.
-                    
-                    The prompt you write must describe:
-                    1. The Vibe/Aesthetics (guess colors/fonts based on content tone).
-                    2. The Structure (Hero, Features, Footer, etc.).
-                    3. The Content Strategy.
-                    4. The exact technical instruction to build it (HTML/Tailwind/React).
-                    
-                    SCRAPED WEBSITE CONTENT:
-                    "{site_text}"
-                    
-                    OUTPUT:
-                    Provide ONLY the prompt I should use, inside a code block.
-                    """
-                    
-                    response = model.generate_content(analysis_prompt)
-                    
-                    st.success("Analysis Complete! Copy the prompt below to build your clone.")
-                    st.subheader("🧬 The Replication Prompt:")
-                    st.code(response.text, language='markdown')
-                    
-            except Exception as e:
-                st.error(f"Could not crawl site. It might be blocking bots. Error: {e}")
