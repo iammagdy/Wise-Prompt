@@ -3,7 +3,7 @@ import google.generativeai as genai
 import requests
 from bs4 import BeautifulSoup
 import json
-import re  # <--- NEW: For cleaning messy AI output
+import re
 
 # --- PAGE CONFIGURATION ---
 st.set_page_config(
@@ -98,6 +98,22 @@ with tab1:
                 ]
             )
             
+            # --- DYNAMIC EXPLANATIONS (The Brief) ---
+            descriptions = {
+                "✨ Auto-Detect (AI Decides)": "🤖 **Best for:** When you aren't sure. I will analyze your text and pick the perfect framework automatically.",
+                "⚡ Vibe Coder (Bolt/Antigravity)": "💻 **Best for:** AI Agents (Bolt.new, Replit Agent). Generates prompts with 'Few-Shot Examples' to prevent bad code.",
+                "CO-STAR (General Writing)": "📝 **Best for:** Blogs, Essays, Marketing. Uses Context, Objective, Style, Tone, Audience, Response.",
+                "Chain of Thought (Logic)": "🧠 **Best for:** Math, Riddles, Complex Logic. Forces the AI to think step-by-step to avoid errors.",
+                "Senior Coder (Python/JS)": "👨‍💻 **Best for:** Technical specs. Focuses on clean architecture, error handling, and security.",
+                "Email Polisher": "mw **Best for:** Corporate Comms. Turns 'angry notes' into polite, professional emails.",
+                "S.M.A.R.T. (Business)": "📊 **Best for:** Goals & Planning. Ensures outputs are Specific, Measurable, Achievable, Relevant, and Time-bound.",
+                "The 5 Ws (Reporting)": "📰 **Best for:** Journalism & Summaries. Ensures Who, What, Where, When, and Why are covered."
+            }
+            
+            # Show the description for the selected mode
+            st.info(descriptions[mode])
+            
+            # Sub-options for Vibe Coder
             vibe_type = "Genesis"
             if mode == "⚡ Vibe Coder (Bolt/Antigravity)":
                 vibe_type = st.radio("Stage?", ["Genesis (Start)", "Refiner (Polish)", "Logic Fixer (Bugs)"])
@@ -111,45 +127,52 @@ with tab1:
                 with st.spinner("🧠 Analyzing gaps in your request..."):
                     
                     # 1. ANALYZE & GENERATE QUESTIONS
+                    # We need to detect the mode first if Auto is selected
+                    target_mode = mode
+                    if mode == "✨ Auto-Detect (AI Decides)":
+                         # Quick classifier
+                         classifier_prompt = f"Classify intent: '{raw_prompt}'. Return ONE word: CODE, BUG, WRITING, LOGIC, EMAIL, PLAN."
+                         cls = generate_with_fallback(model_name, classifier_prompt)
+                         cat = cls.text.strip().upper() if cls else "WRITING"
+                         
+                         if "CODE" in cat: target_mode = "⚡ Vibe Coder (Bolt/Antigravity)"
+                         elif "BUG" in cat: target_mode = "⚡ Vibe Coder (Bolt/Antigravity)" # Fixer logic handled later
+                         elif "LOGIC" in cat: target_mode = "Chain of Thought (Logic)"
+                         elif "EMAIL" in cat: target_mode = "Email Polisher"
+                         elif "PLAN" in cat: target_mode = "S.M.A.R.T. (Business)"
+                         else: target_mode = "CO-STAR (General Writing)"
+
                     analysis_prompt = f"""
                     Analyze this user request: "{raw_prompt}"
+                    Target Framework: {target_mode}
                     
-                    TASK 1: Rewrite it into a 'Draft Prompt' using the best framework (CO-STAR or Technical Spec).
-                    TASK 2: Identify 3 MISSING pieces of information that would make this prompt perfect.
+                    TASK 1: Rewrite it into a 'Draft Prompt' using the target framework.
+                    TASK 2: Identify 3 MISSING pieces of information.
                     
                     OUTPUT FORMAT (JSON):
                     {{
                         "draft": "The rewritten draft prompt...",
                         "questions": ["Question 1?", "Question 2?", "Question 3?"]
                     }}
-                    
-                    IMPORTANT: Output valid JSON only. Do not add markdown formatting like ```json.
                     """
                     
                     response = generate_with_fallback(model_name, analysis_prompt)
                     
                     if response:
                         try:
-                            # --- ROBUST CLEANING LOGIC (THE FIX) ---
-                            # This finds the JSON object {...} even if the AI adds text around it
+                            # Clean JSON
                             text = response.text
                             match = re.search(r'\{.*\}', text, re.DOTALL)
-                            
                             if match:
-                                json_str = match.group()
-                                data = json.loads(json_str)
-                                
-                                st.session_state.draft_result = data.get('draft', "Error parsing draft.")
-                                st.session_state.discovery_questions = data.get('questions', ["What details are missing?", "Who is the audience?", "What is the goal?"])
+                                data = json.loads(match.group())
+                                st.session_state.draft_result = data.get('draft', "")
+                                st.session_state.discovery_questions = data.get('questions', [])
                                 st.session_state.enhancer_step = "analysis"
                                 st.rerun()
                             else:
-                                st.error("AI output was not valid JSON. Please try again.")
-                                st.code(text) # Show raw text for debugging
+                                st.error("AI output invalid.")
                         except Exception as e:
-                            st.error(f"Parsing Error: {e}")
-                            st.write("Raw AI Output:")
-                            st.code(response.text)
+                            st.error(f"Error: {e}")
 
     # STEP 2: DISCOVERY
     elif st.session_state.enhancer_step == "analysis":
@@ -160,7 +183,6 @@ with tab1:
         with col_a:
             st.subheader("📄 Draft V1 (Good)")
             st.code(st.session_state.draft_result, language="markdown")
-            
             if st.button("🔙 Start Over"):
                 st.session_state.enhancer_step = "input"
                 st.rerun()
@@ -170,10 +192,9 @@ with tab1:
             st.info("The AI suggests answering these to reach 'God Mode':")
             
             with st.form("discovery_form"):
-                # Safety check in case questions list is empty
                 q_list = st.session_state.discovery_questions
-                while len(q_list) < 3:
-                    q_list.append("Any extra details?")
+                # Pad list if AI returns fewer than 3
+                while len(q_list) < 3: q_list.append("Any extra details?")
                 
                 q1 = st.text_input(f"1. {q_list[0]}")
                 q2 = st.text_input(f"2. {q_list[1]}")
@@ -182,34 +203,23 @@ with tab1:
                 submitted = st.form_submit_button("✨ Update & Finalize")
                 
                 if submitted:
-                    with st.spinner("Synthesizing your answers..."):
+                    with st.spinner("Synthesizing..."):
                         final_prompt_request = f"""
-                        The user has refined the previous draft.
-                        
-                        ORIGINAL DRAFT:
-                        {st.session_state.draft_result}
-                        
-                        USER ANSWERS TO CLARIFYING QUESTIONS:
-                        1. Question: {q_list[0]} -> Answer: {q1}
-                        2. Question: {q_list[1]} -> Answer: {q2}
-                        3. Question: {q_list[2]} -> Answer: {q3}
-                        
-                        TASK: Merge the original draft and the new answers into a FINAL MASTER PROMPT.
-                        If this is code, include '### FEW-SHOT TRAINING' examples.
+                        Merge into FINAL PROMPT.
+                        DRAFT: {st.session_state.draft_result}
+                        ANSWERS: 1.{q1}, 2.{q2}, 3.{q3}
                         """
-                        
                         final_resp = generate_with_fallback(model_name, final_prompt_request)
                         if final_resp:
                             st.session_state.draft_result = final_resp.text
                             st.session_state.enhancer_step = "final"
                             st.rerun()
 
-    # STEP 3: FINAL RESULT
+    # STEP 3: FINAL
     elif st.session_state.enhancer_step == "final":
         st.balloons()
         st.subheader("🚀 God-Mode Prompt (Final)")
         st.code(st.session_state.draft_result, language="markdown")
-        
         if st.button("🔄 Create Another"):
             st.session_state.enhancer_step = "input"
             st.rerun()
@@ -225,7 +235,7 @@ with tab2:
     if 'site_title' not in st.session_state:
         st.session_state.site_title = ""
 
-    url = st.text_input("Target Website URL:", placeholder="[https://example.com](https://example.com)")
+    url = st.text_input("Target Website URL:", placeholder="https://example.com")
     
     if st.button("🕷️ Scan Website"):
         if not url:
