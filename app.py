@@ -39,7 +39,7 @@ if st.button("✨ Enhance My Prompt", type="primary"):
         try:
             # Connect to Google
             genai.configure(api_key=api_key)
-            model = genai.GenerativeModel('gemini-1.5-flash')
+            model = genai.GenerativeModel('gemini-pro')
 
             # The Secret Instructions (Meta-Prompts)
             meta_prompts = {
