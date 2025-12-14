@@ -18,13 +18,10 @@ st.set_page_config(
     initial_sidebar_state="auto"
 )
 
-# Inject "Hacker" Vibe CSS with Mobile Optimizations
 st.markdown("""
     <style>
-    /* --- MAIN DESKTOP THEME --- */
+    /* --- MAIN THEME --- */
     .stApp { background-color: #0E1117; color: #00FF94; }
-    
-    /* Sidebar */
     [data-testid="stSidebar"] { background-color: #161B22; border-right: 1px solid #30363D; }
     
     /* Inputs */
@@ -36,27 +33,17 @@ st.markdown("""
     
     /* Buttons */
     .stButton button { background-color: #238636; color: white; border: none; font-weight: bold; }
+    .stButton button:hover { background-color: #2EA043; box-shadow: 0 0 15px #2EA043; }
     
     /* Headers */
     h1, h2, h3 { font-family: 'Courier New', monospace; color: #E6EDF3; }
     
-    /* Info Boxes & Alerts */
-    div.stAlert { background-color: #161B22; border: 1px solid #30363D; color: #E6EDF3; }
-
-    /* Metrics */
-    .metric-container { background-color: #0D1117; border: 1px solid #30363D; padding: 10px; border-radius: 5px; }
-    div[data-testid="stMarkdownContainer"] p { font-size: 1.05em; }
-
     /* --- MOBILE OPTIMIZATIONS --- */
     @media only screen and (max-width: 600px) {
         .block-container { padding-top: 1rem; padding-left: 0.5rem; padding-right: 0.5rem; }
-        /* Big Thumbs-friendly Buttons */
         .stButton button { width: 100%; height: 3.5rem; font-size: 1.2rem; margin-top: 10px; }
-        /* Prevent Auto-Zoom on Inputs */
         .stTextInput input, .stTextArea textarea { font-size: 16px !important; }
         h1 { font-size: 1.8rem; text-align: center; }
-        /* Stack Metrics */
-        div[data-testid="stMetric"] { margin-bottom: 10px; }
     }
     </style>
 """, unsafe_allow_html=True)
@@ -82,7 +69,7 @@ def add_to_history(api_key, tool_used, input_data, output_data):
         "input": str(input_data)[:200] + "...", 
         "output": output_data
     }
-    db[api_key].insert(0, entry) # Add to top
+    db[api_key].insert(0, entry)
     save_history_db(db)
 
 def get_user_history(api_key):
@@ -116,27 +103,6 @@ def generate_with_fallback(user_model_name, prompt, image=None):
             st.error(f"❌ Error: {e}")
             return None
 
-def extract_assets(soup, url):
-    assets = {"fonts": [], "icons": [], "images": []}
-    for link in soup.find_all('link', href=True):
-        href = link['href']
-        if 'fonts.googleapis.com' in href or href.endswith('.woff') or href.endswith('.woff2'):
-            assets['fonts'].append(urljoin(url, href))
-    for link in soup.find_all('link', rel=True):
-        rel_val = link['rel']
-        if isinstance(rel_val, list):
-            if 'icon' in rel_val: assets['icons'].append(urljoin(url, link.get('href', '')))
-        elif 'icon' in rel_val:
-             assets['icons'].append(urljoin(url, link.get('href', '')))
-    for img in soup.find_all('img', src=True):
-        src = img['src']
-        full_src = urljoin(url, src)
-        if 'logo' in src.lower() or src.endswith('.svg'):
-            assets['icons'].append(full_src)
-        else:
-            assets['images'].append(full_src)
-    return assets
-
 def recursive_crawl(start_url, max_pages=5):
     visited = set()
     queue = [start_url]
@@ -163,7 +129,6 @@ def recursive_crawl(start_url, max_pages=5):
             if response.status_code != 200: continue
             soup = BeautifulSoup(response.content, 'html.parser')
             
-            # Update Stats
             global_stats["buttons"] += len(soup.find_all('button'))
             global_stats["links"] += len(soup.find_all('a'))
             global_stats["images"] += len(soup.find_all('img'))
@@ -172,13 +137,25 @@ def recursive_crawl(start_url, max_pages=5):
             global_stats["words"] += len(text_content.split())
             global_stats["pages"] += 1
             
-            # Map Structure
             scripts = [s.get('src') for s in soup.find_all('script') if s.get('src')]
             title = soup.title.string if soup.title else "No Title"
             site_structure[url] = {"title": title, "scripts": scripts[:3]}
             
-            # Hunt Assets
-            page_assets = extract_assets(soup, url)
+            def extract_assets_internal(soup, url):
+                assets = {"fonts": [], "icons": [], "images": []}
+                for link in soup.find_all('link', href=True):
+                    href = link['href']
+                    if 'fonts.googleapis.com' in href or href.endswith('.woff'): assets['fonts'].append(urljoin(url, href))
+                for link in soup.find_all('link', rel=True):
+                    if 'icon' in str(link.get('rel')): assets['icons'].append(urljoin(url, link.get('href', '')))
+                for img in soup.find_all('img', src=True):
+                    src = img['src']
+                    full_src = urljoin(url, src)
+                    if 'logo' in src.lower() or src.endswith('.svg'): assets['icons'].append(full_src)
+                    else: assets['images'].append(full_src)
+                return assets
+
+            page_assets = extract_assets_internal(soup, url)
             all_assets['fonts'].update(page_assets['fonts'])
             all_assets['icons'].update(page_assets['icons'])
             
@@ -186,7 +163,6 @@ def recursive_crawl(start_url, max_pages=5):
             visited.add(url)
             count += 1
             
-            # Find Next Links
             for link in soup.find_all('a', href=True):
                 href = link['href']
                 full_url = urljoin(url, href)
@@ -200,7 +176,7 @@ def recursive_crawl(start_url, max_pages=5):
     final_assets = {k: list(v) for k, v in all_assets.items()}
     return combined_text, site_structure, final_assets, global_stats
 
-# --- 4. SIDEBAR (MODEL SELECTOR) ---
+# --- 4. SIDEBAR ---
 with st.sidebar:
     st.header("⚙️ SYSTEM CONTROL")
     api_key = st.text_input("API KEY", type="password", key="sidebar_api_key")
@@ -221,19 +197,6 @@ with st.sidebar:
     else:
         model_name = selected_option
     st.caption(f"Active Model: `{model_name}`")
-    
-    if st.button("🐞 SYSTEM CHECK", key="sidebar_check_btn"):
-        if not api_key:
-            st.error("ACCESS DENIED: NO KEY")
-        else:
-            try:
-                genai.configure(api_key=api_key)
-                st.write("✅ **ACCESS GRANTED:**")
-                for m in genai.list_models():
-                    if 'generateContent' in m.supported_generation_methods:
-                        st.code(m.name.replace("models/", ""))
-            except Exception as e:
-                st.error(f"Error: {e}")
 
 # --- 5. MAIN APP ---
 st.title("⚡ God-Mode: Wise AI")
@@ -248,16 +211,15 @@ genai.configure(api_key=api_key)
 tab1, tab2, tab3, tab4 = st.tabs(["✨ PROMPT ARCHITECT", "🕷️ DEEP NET SCANNER", "👁️ VISION REPLICATOR", "📜 HISTORY"])
 
 # ==========================================
-# TAB 1: PROMPT ARCHITECT (FULL FEATURES)
+# TAB 1: PROMPT ARCHITECT (SUPER-CHARGED V17)
 # ==========================================
 with tab1:
     st.header("✨ The Architect Engine")
     
-    # 1. Full Strategy List
     mode = st.selectbox("STRATEGY", [
-        "✨ Auto-Detect (AI Decides)", 
         "⚡ Vibe Coder (Bolt/Antigravity)", 
         "🧠 Super-System (The Architect)", 
+        "✨ Auto-Detect (AI Decides)", 
         "CO-STAR (General Writing)", 
         "Chain of Thought (Logic)", 
         "Senior Coder (Python/JS)", 
@@ -267,22 +229,14 @@ with tab1:
         "Custom Persona"
     ], key="tab1_strategy")
 
-    # 2. Dynamic Blue Briefs (Restored)
+    # Briefs
     descriptions = {
-        "✨ Auto-Detect (AI Decides)": "🤖 **Best for:** Unsure users. I analyze intent and pick the best framework.",
-        "⚡ Vibe Coder (Bolt/Antigravity)": "💻 **Best for:** AI Agents. Adds 'Few-Shot Examples' & Coding Standards.",
-        "🧠 Super-System (The Architect)": "🏗️ **Best for:** Complex Tasks. Builds a massive 'System Protocol' with Role, Task, Knowledge, and Constraints.",
-        "CO-STAR (General Writing)": "📝 **Best for:** Blogs & Essays. Context, Objective, Style, Tone, Audience, Response.",
-        "Chain of Thought (Logic)": "🧠 **Best for:** Math & Riddles. Forces step-by-step thinking.",
-        "Senior Coder (Python/JS)": "👨‍💻 **Best for:** Technical specs. Focuses on clean architecture and security.",
-        "Email Polisher": "📧 **Best for:** Corporate Comms. Turns notes into professional emails.",
-        "S.M.A.R.T. (Business)": "📊 **Best for:** Goals. Specific, Measurable, Achievable, Relevant, Time-bound.",
-        "The 5 Ws (Reporting)": "📰 **Best for:** Journalism. Who, What, Where, When, Why.",
-        "Custom Persona": "🎭 **Best for:** Roleplay. (e.g., Steve Jobs, Lawyer)."
+        "⚡ Vibe Coder (Bolt/Antigravity)": "💻 **Best for Coding.** Forces the AI to invent Tech Stack, UI Rules, and File Structure.",
+        "🧠 Super-System (The Architect)": "🏗️ **Best for Complex Tasks.** Builds a massive Protocol with Constraints & Knowledge Base.",
+        "✨ Auto-Detect (AI Decides)": "🤖 **Best for General.** Analyzes intent and picks the best framework.",
     }
     if mode in descriptions: st.info(descriptions[mode])
 
-    # 3. Dynamic Sub-Options
     vibe_type = "Genesis"
     agent_name = "Expert"
     complexity = "God-Mode"
@@ -294,39 +248,89 @@ with tab1:
     elif mode == "🧠 Super-System (The Architect)":
         complexity = st.select_slider("DEPTH", ["Standard", "Detailed", "God-Mode"], value="God-Mode", key="tab1_slider")
 
-    # 4. Input & Execution
-    raw_prompt = st.text_area("YOUR REQUEST", height=150, placeholder="e.g. bring any updated pdf to charts...", key="tab1_input")
+    raw_prompt = st.text_area("YOUR REQUEST", height=150, placeholder="e.g. build a to-do app...", key="tab1_input")
     
     if st.button("🚀 ARCHITECT PROMPT", type="primary", key="tab1_btn"):
         if not raw_prompt:
             st.warning("Input required.")
         else:
-            with st.spinner("Architecting..."):
+            with st.spinner("Architecting Super-Prompt..."):
                 system_instruction = ""
                 
-                # Logic Switcher
-                if mode == "🧠 Super-System (The Architect)":
+                # --- 1. VIBE CODER (GOD-MODE INJECTION) ---
+                if mode == "⚡ Vibe Coder (Bolt/Antigravity)":
+                    system_instruction = f"""
+                    You are the "Vibe Coder" Architect.
+                    USER REQUEST: "{raw_prompt}"
+                    FRAMEWORK: {vibe_type}
+
+                    YOUR TASK:
+                    Write a "God-Mode" System Prompt for an AI Developer (Bolt.new/Cursor).
+                    You must NOT just repeat the user's request. You must EXPAND it into a production spec.
+
+                    STRICT OUTPUT STRUCTURE (Markdown):
+                    # 1. Role
+                    Act as a Senior [React/Python] Architect.
+
+                    # 2. Project & Tech Stack (You MUST invent this)
+                    * Framework: [e.g. React + Vite]
+                    * Styling: [e.g. Tailwind CSS]
+                    * State: [e.g. Zustand/Context]
+                    * Icons: [e.g. Lucide-React]
+                    * Animation: [e.g. Framer Motion]
+
+                    # 3. Core Features (Functional Requirements)
+                    [List 5-7 advanced features. e.g. if 'Todo App', add 'Categories', 'Priority Tags', 'Local Storage Persistence'.]
+
+                    # 4. UI/UX & "Vibe" (Non-Functional)
+                    [Define the design system. e.g. "Glassmorphism", "Rounded Corners", "Smooth Transitions".]
+
+                    # 5. Component Architecture
+                    [List the key components e.g. <Navbar />, <TaskCard />]
+
+                    # 6. FEW-SHOT TRAINING (Crucial)
+                    [Provide a 'Bad Code' vs 'Good Code' example relevant to this stack.]
+                    """
+
+                # --- 2. SUPER SYSTEM (GOD-MODE INJECTION) ---
+                elif mode == "🧠 Super-System (The Architect)":
                     system_instruction = f"""
                     You are the World's Greatest Prompt Architect.
                     USER INPUT: "{raw_prompt}"
                     INTENSITY: {complexity}
-                    GOAL: Transform this into a massive, world-class "System Prompt".
+
+                    GOAL: Transform this into a massive, world-class "System Protocol".
+                    
                     STRICT OUTPUT STRUCTURE (Markdown):
                     # 1. MISSION PROFILE
+                    **Role:** [Define precise persona]
+                    **Objective:** [Success State]
+                    **Context:** [Why?]
+
                     # 2. STRATEGIC PROTOCOL
-                    # 3. KNOWLEDGE BASE (Crucial)
-                    # 4. CONSTRAINTS
+                    [Step-by-Step execution plan. Be algorithmic.]
+
+                    # 3. KNOWLEDGE BASE & BEST PRACTICES (Crucial)
+                    [List 5-7 expert principles. Hallucinate these based on the domain. e.g. "Prioritize Tufte's data-ink ratio" or "Use Clean Code principles".]
+
+                    # 4. CONSTRAINTS & GUARDRAILS
+                    [What must the AI NOT do?]
+
                     # 5. OUTPUT FORMATTING
-                    INTERNAL: Do NOT talk to user. JUST OUTPUT THE PROMPT.
+                    [Exact format definition]
                     """
-                elif mode == "⚡ Vibe Coder (Bolt/Antigravity)":
-                    subtype = ""
-                    if "Genesis" in vibe_type: subtype = "Focus on scaffolding."
-                    if "Refiner" in vibe_type: subtype = "Focus on UI polish."
-                    if "Logic" in vibe_type: subtype = "Focus on debugging."
-                    system_instruction = f"Act as Expert Prompt Engineer. FRAMEWORK: Vibe Coder ({vibe_type}). USER INPUT: '{raw_prompt}'. TASK: Create System Prompt for AI Coder. {subtype} CRITICAL: Include '### FEW-SHOT TRAINING' examples."
+
+                # --- 3. AUTO DETECT ---
                 elif mode == "✨ Auto-Detect (AI Decides)":
-                    system_instruction = f"Analyze: '{raw_prompt}'. Detect intent. Rewrite using BEST framework. Output ONLY the rewritten prompt."
+                    system_instruction = f"""
+                    Analyze: "{raw_prompt}".
+                    1. Detect the intent (Code? Writing? Logic?).
+                    2. If Code, write a full 'Vibe Coder' spec with Tech Stack and UI rules.
+                    3. If Writing/Logic, write a full 'Super-System' protocol.
+                    4. Output ONLY the optimized prompt.
+                    """
+
+                # --- 4. OTHER MODES ---
                 elif mode == "CO-STAR (General Writing)":
                     system_instruction = f"Rewrite using CO-STAR. INPUT: '{raw_prompt}'"
                 elif mode == "Custom Persona":
@@ -334,6 +338,7 @@ with tab1:
                 else:
                     system_instruction = f"Rewrite professionally using {mode}. INPUT: '{raw_prompt}'"
 
+                # Execute
                 res = generate_with_fallback(model_name, system_instruction)
                 if res: 
                     st.success("✅ Architecture Complete")
@@ -341,7 +346,7 @@ with tab1:
                     add_to_history(api_key, f"Prompt Architect ({mode})", raw_prompt, res.text)
 
 # ==========================================
-# TAB 2: DEEP NET SCANNER (FULL FEATURES)
+# TAB 2: DEEP NET SCANNER (FULL)
 # ==========================================
 with tab2:
     st.header("🕷️ Deep Net Scanner")
@@ -376,7 +381,6 @@ with tab2:
 
     if st.session_state.knowledge_base:
         st.divider()
-        # Stats Dashboard
         stats = st.session_state.global_stats
         if stats:
             k1, k2, k3, k4 = st.columns(4)
