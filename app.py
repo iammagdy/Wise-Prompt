@@ -12,10 +12,10 @@ from urllib.parse import urljoin, urlparse
 
 # --- 1. PAGE CONFIG & RESPONSIVE CYBERPUNK CSS ---
 st.set_page_config(
-    page_title="GOD-MODE: OMNI-TOOL",
+    page_title="God-Mode: Wise AI",
     page_icon="⚡",
     layout="wide",
-    initial_sidebar_state="auto" # Let Streamlit decide based on screen size
+    initial_sidebar_state="auto"
 )
 
 # Inject "Hacker" Vibe CSS with Mobile Optimizations
@@ -34,73 +34,29 @@ st.markdown("""
         border: 1px solid #30363D;
     }
     
+    /* Buttons */
+    .stButton button { background-color: #238636; color: white; border: none; font-weight: bold; }
+    
     /* Headers */
     h1, h2, h3 { font-family: 'Courier New', monospace; color: #E6EDF3; }
     
+    /* Info Boxes & Alerts */
+    div.stAlert { background-color: #161B22; border: 1px solid #30363D; color: #E6EDF3; }
+
     /* Metrics */
     .metric-container { background-color: #0D1117; border: 1px solid #30363D; padding: 10px; border-radius: 5px; }
     div[data-testid="stMarkdownContainer"] p { font-size: 1.05em; }
 
-    /* --- MOBILE OPTIMIZATIONS (The Magic) --- */
+    /* --- MOBILE OPTIMIZATIONS --- */
     @media only screen and (max-width: 600px) {
-        
-        /* 1. Reset Padding for small screens */
-        .block-container {
-            padding-top: 1rem !important;
-            padding-left: 0.5rem !important;
-            padding-right: 0.5rem !important;
-        }
-
-        /* 2. Big, Tappable Buttons */
-        .stButton button {
-            width: 100% !important;
-            height: 3.5rem !important;
-            font-size: 1.2rem !important;
-            margin-top: 10px;
-            background-color: #238636;
-            color: white;
-            border-radius: 8px;
-        }
-        
-        /* 3. Prevent iOS Zoom on Inputs (Font 16px+) */
-        .stTextInput input, .stTextArea textarea, .stSelectbox div {
-            font-size: 16px !important;
-        }
-
-        /* 4. Headers Scaling */
-        h1 { font-size: 1.8rem !important; text-align: center; }
-        h2 { font-size: 1.4rem !important; }
-        h3 { font-size: 1.2rem !important; }
-
-        /* 5. Metrics Stacking */
-        div[data-testid="stMetric"] {
-            background-color: #161B22;
-            padding: 10px;
-            margin-bottom: 5px;
-            border-radius: 5px;
-            border: 1px solid #30363D;
-            text-align: center;
-        }
-        
-        /* 6. Sidebar Mobile */
-        [data-testid="stSidebar"] {
-            width: 85% !important; /* Make it wider on mobile for ease of use */
-        }
-    }
-    
-    /* Desktop Button Hover Effect (Keep for desktop users) */
-    @media only screen and (min-width: 601px) {
-        .stButton button { 
-            background-color: #238636; 
-            color: white; 
-            border: none; 
-            font-weight: bold; 
-            transition: all 0.3s ease;
-        }
-        .stButton button:hover { 
-            background-color: #2EA043; 
-            box-shadow: 0 0 10px #2EA043;
-        }
+        .block-container { padding-top: 1rem; padding-left: 0.5rem; padding-right: 0.5rem; }
+        /* Big Thumbs-friendly Buttons */
+        .stButton button { width: 100%; height: 3.5rem; font-size: 1.2rem; margin-top: 10px; }
+        /* Prevent Auto-Zoom on Inputs */
+        .stTextInput input, .stTextArea textarea { font-size: 16px !important; }
+        h1 { font-size: 1.8rem; text-align: center; }
+        /* Stack Metrics */
+        div[data-testid="stMetric"] { margin-bottom: 10px; }
     }
     </style>
 """, unsafe_allow_html=True)
@@ -126,7 +82,7 @@ def add_to_history(api_key, tool_used, input_data, output_data):
         "input": str(input_data)[:200] + "...", 
         "output": output_data
     }
-    db[api_key].insert(0, entry)
+    db[api_key].insert(0, entry) # Add to top
     save_history_db(db)
 
 def get_user_history(api_key):
@@ -207,6 +163,7 @@ def recursive_crawl(start_url, max_pages=5):
             if response.status_code != 200: continue
             soup = BeautifulSoup(response.content, 'html.parser')
             
+            # Update Stats
             global_stats["buttons"] += len(soup.find_all('button'))
             global_stats["links"] += len(soup.find_all('a'))
             global_stats["images"] += len(soup.find_all('img'))
@@ -215,10 +172,12 @@ def recursive_crawl(start_url, max_pages=5):
             global_stats["words"] += len(text_content.split())
             global_stats["pages"] += 1
             
+            # Map Structure
             scripts = [s.get('src') for s in soup.find_all('script') if s.get('src')]
             title = soup.title.string if soup.title else "No Title"
             site_structure[url] = {"title": title, "scripts": scripts[:3]}
             
+            # Hunt Assets
             page_assets = extract_assets(soup, url)
             all_assets['fonts'].update(page_assets['fonts'])
             all_assets['icons'].update(page_assets['icons'])
@@ -227,6 +186,7 @@ def recursive_crawl(start_url, max_pages=5):
             visited.add(url)
             count += 1
             
+            # Find Next Links
             for link in soup.find_all('a', href=True):
                 href = link['href']
                 full_url = urljoin(url, href)
@@ -240,21 +200,29 @@ def recursive_crawl(start_url, max_pages=5):
     final_assets = {k: list(v) for k, v in all_assets.items()}
     return combined_text, site_structure, final_assets, global_stats
 
-# --- 4. SIDEBAR ---
+# --- 4. SIDEBAR (MODEL SELECTOR) ---
 with st.sidebar:
     st.header("⚙️ SYSTEM CONTROL")
-    api_key = st.text_input("API KEY", type="password")
+    api_key = st.text_input("API KEY", type="password", key="sidebar_api_key")
     st.divider()
     
-    model_options = ["gemini-2.0-flash-exp", "gemini-3-pro-preview", "gemini-2.5-flash", "gemini-1.5-pro", "gemini-1.5-flash", "Custom (Type new...)"]
-    selected_option = st.selectbox("MODEL", model_options)
+    model_options = [
+        "gemini-2.0-flash-exp", 
+        "gemini-3-pro-preview", 
+        "gemini-2.5-flash", 
+        "gemini-1.5-pro", 
+        "gemini-1.5-flash", 
+        "Custom (Type new...)"
+    ]
+    selected_option = st.selectbox("MODEL", model_options, key="sidebar_model_select")
+    
     if selected_option == "Custom (Type new...)":
-        model_name = st.text_input("ENTER CUSTOM MODEL NAME", value="gemini-2.0-flash-exp")
+        model_name = st.text_input("ENTER CUSTOM MODEL NAME", value="gemini-2.0-flash-exp", key="sidebar_custom_model")
     else:
         model_name = selected_option
     st.caption(f"Active Model: `{model_name}`")
     
-    if st.button("🐞 SYSTEM CHECK"):
+    if st.button("🐞 SYSTEM CHECK", key="sidebar_check_btn"):
         if not api_key:
             st.error("ACCESS DENIED: NO KEY")
         else:
@@ -268,7 +236,7 @@ with st.sidebar:
                 st.error(f"Error: {e}")
 
 # --- 5. MAIN APP ---
-st.title("⚡ GOD-MODE: OMNI-TOOL")
+st.title("⚡ God-Mode: Wise AI")
 st.markdown("---")
 
 if not api_key:
@@ -280,29 +248,28 @@ genai.configure(api_key=api_key)
 tab1, tab2, tab3, tab4 = st.tabs(["✨ PROMPT ARCHITECT", "🕷️ DEEP NET SCANNER", "👁️ VISION REPLICATOR", "📜 HISTORY"])
 
 # ==========================================
-# TAB 1: PROMPT ARCHITECT
+# TAB 1: PROMPT ARCHITECT (FULL FEATURES)
 # ==========================================
 with tab1:
     st.header("✨ The Architect Engine")
     
-    mode = st.selectbox(
-        "STRATEGY", 
-        [
-            "✨ Auto-Detect (AI Decides)", 
-            "⚡ Vibe Coder (Bolt/Antigravity)", 
-            "🧠 Super-System (The Architect)", 
-            "CO-STAR (General Writing)", 
-            "Chain of Thought (Logic)", 
-            "Senior Coder (Python/JS)", 
-            "Email Polisher", 
-            "S.M.A.R.T. (Business)", 
-            "The 5 Ws (Reporting)", 
-            "Custom Persona"
-        ]
-    )
+    # 1. Full Strategy List
+    mode = st.selectbox("STRATEGY", [
+        "✨ Auto-Detect (AI Decides)", 
+        "⚡ Vibe Coder (Bolt/Antigravity)", 
+        "🧠 Super-System (The Architect)", 
+        "CO-STAR (General Writing)", 
+        "Chain of Thought (Logic)", 
+        "Senior Coder (Python/JS)", 
+        "Email Polisher", 
+        "S.M.A.R.T. (Business)", 
+        "The 5 Ws (Reporting)", 
+        "Custom Persona"
+    ], key="tab1_strategy")
 
+    # 2. Dynamic Blue Briefs (Restored)
     descriptions = {
-        "✨ Auto-Detect (AI Decides)": "🤖 **Best for:** Unsure users. I analyze intent and pick the best framework automatically.",
+        "✨ Auto-Detect (AI Decides)": "🤖 **Best for:** Unsure users. I analyze intent and pick the best framework.",
         "⚡ Vibe Coder (Bolt/Antigravity)": "💻 **Best for:** AI Agents. Adds 'Few-Shot Examples' & Coding Standards.",
         "🧠 Super-System (The Architect)": "🏗️ **Best for:** Complex Tasks. Builds a massive 'System Protocol' with Role, Task, Knowledge, and Constraints.",
         "CO-STAR (General Writing)": "📝 **Best for:** Blogs & Essays. Context, Objective, Style, Tone, Audience, Response.",
@@ -315,27 +282,43 @@ with tab1:
     }
     if mode in descriptions: st.info(descriptions[mode])
 
+    # 3. Dynamic Sub-Options
     vibe_type = "Genesis"
     agent_name = "Expert"
     complexity = "God-Mode"
 
     if mode == "⚡ Vibe Coder (Bolt/Antigravity)":
-        vibe_type = st.radio("STAGE?", ["Genesis (Start New)", "Refiner (Polish UI)", "Logic Fixer (Debug)"], horizontal=True)
+        vibe_type = st.radio("STAGE?", ["Genesis (Start New)", "Refiner (Polish UI)", "Logic Fixer (Debug)"], horizontal=True, key="tab1_vibe")
     elif mode == "Custom Persona":
-        agent_name = st.text_input("WHO IS THE AGENT?", placeholder="e.g. Steve Jobs")
+        agent_name = st.text_input("WHO IS THE AGENT?", placeholder="e.g. Steve Jobs", key="tab1_persona")
     elif mode == "🧠 Super-System (The Architect)":
-        complexity = st.select_slider("DEPTH", ["Standard", "Detailed", "God-Mode"], value="God-Mode")
+        complexity = st.select_slider("DEPTH", ["Standard", "Detailed", "God-Mode"], value="God-Mode", key="tab1_slider")
 
-    raw_prompt = st.text_area("YOUR REQUEST", height=150, placeholder="e.g. bring any updated pdf to charts...")
+    # 4. Input & Execution
+    raw_prompt = st.text_area("YOUR REQUEST", height=150, placeholder="e.g. bring any updated pdf to charts...", key="tab1_input")
     
-    if st.button("🚀 ARCHITECT PROMPT", type="primary"):
+    if st.button("🚀 ARCHITECT PROMPT", type="primary", key="tab1_btn"):
         if not raw_prompt:
             st.warning("Input required.")
         else:
             with st.spinner("Architecting..."):
                 system_instruction = ""
+                
+                # Logic Switcher
                 if mode == "🧠 Super-System (The Architect)":
-                    system_instruction = f"You are the World's Greatest Prompt Architect. USER INPUT: '{raw_prompt}'. INTENSITY: {complexity}. GOAL: Transform this into a massive, world-class 'System Prompt'. STRICT OUTPUT STRUCTURE (Markdown): 1. MISSION PROFILE 2. STRATEGIC PROTOCOL 3. KNOWLEDGE BASE 4. CONSTRAINTS 5. OUTPUT FORMATTING"
+                    system_instruction = f"""
+                    You are the World's Greatest Prompt Architect.
+                    USER INPUT: "{raw_prompt}"
+                    INTENSITY: {complexity}
+                    GOAL: Transform this into a massive, world-class "System Prompt".
+                    STRICT OUTPUT STRUCTURE (Markdown):
+                    # 1. MISSION PROFILE
+                    # 2. STRATEGIC PROTOCOL
+                    # 3. KNOWLEDGE BASE (Crucial)
+                    # 4. CONSTRAINTS
+                    # 5. OUTPUT FORMATTING
+                    INTERNAL: Do NOT talk to user. JUST OUTPUT THE PROMPT.
+                    """
                 elif mode == "⚡ Vibe Coder (Bolt/Antigravity)":
                     subtype = ""
                     if "Genesis" in vibe_type: subtype = "Focus on scaffolding."
@@ -346,14 +329,10 @@ with tab1:
                     system_instruction = f"Analyze: '{raw_prompt}'. Detect intent. Rewrite using BEST framework. Output ONLY the rewritten prompt."
                 elif mode == "CO-STAR (General Writing)":
                     system_instruction = f"Rewrite using CO-STAR. INPUT: '{raw_prompt}'"
-                elif mode == "S.M.A.R.T. (Business)":
-                    system_instruction = f"Rewrite as S.M.A.R.T Goals. INPUT: '{raw_prompt}'"
-                elif mode == "Senior Coder (Python/JS)":
-                    system_instruction = f"Rewrite as Technical Spec. INPUT: '{raw_prompt}'"
-                elif mode == "Email Polisher":
-                    system_instruction = f"Rewrite as Professional Email. INPUT: '{raw_prompt}'"
+                elif mode == "Custom Persona":
+                     system_instruction = f"Act as {agent_name}. Rewrite exactly how they would speak. INPUT: '{raw_prompt}'"
                 else:
-                    system_instruction = f"Rewrite professionally. INPUT: '{raw_prompt}'"
+                    system_instruction = f"Rewrite professionally using {mode}. INPUT: '{raw_prompt}'"
 
                 res = generate_with_fallback(model_name, system_instruction)
                 if res: 
@@ -362,7 +341,7 @@ with tab1:
                     add_to_history(api_key, f"Prompt Architect ({mode})", raw_prompt, res.text)
 
 # ==========================================
-# TAB 2: DEEP NET SCANNER
+# TAB 2: DEEP NET SCANNER (FULL FEATURES)
 # ==========================================
 with tab2:
     st.header("🕷️ Deep Net Scanner")
@@ -373,15 +352,15 @@ with tab2:
     if 'global_stats' not in st.session_state: st.session_state.global_stats = {}
 
     c1, c2 = st.columns([3, 1])
-    with c1: url = st.text_input("TARGET URL", placeholder="https://example.com")
-    with c2: crawl_scope = st.selectbox("SCOPE", ["Home Page Only", "Quick Scan (5 Pages)", "Deep Scan (20 Pages)", "Massive Scan (50 Pages)"])
+    with c1: url = st.text_input("TARGET URL", placeholder="https://example.com", key="tab2_url")
+    with c2: crawl_scope = st.selectbox("SCOPE", ["Home Page Only", "Quick Scan (5 Pages)", "Deep Scan (20 Pages)", "Massive Scan (50 Pages)"], key="tab2_scope")
 
     page_limit = 1
     if "Quick" in crawl_scope: page_limit = 5
     if "Deep" in crawl_scope: page_limit = 20
     if "Massive" in crawl_scope: page_limit = 50
     
-    if st.button("🕷️ INITIATE SCAN", type="primary"):
+    if st.button("🕷️ INITIATE SCAN", type="primary", key="tab2_btn"):
         if not url: st.warning("URL REQUIRED")
         else:
             full_text, structure, assets, stats = recursive_crawl(url, max_pages=page_limit)
@@ -397,6 +376,7 @@ with tab2:
 
     if st.session_state.knowledge_base:
         st.divider()
+        # Stats Dashboard
         stats = st.session_state.global_stats
         if stats:
             k1, k2, k3, k4 = st.columns(4)
@@ -411,7 +391,7 @@ with tab2:
         for msg in st.session_state.messages:
             with st.chat_message(msg["role"]): st.markdown(msg["content"])
 
-        if user_input := st.chat_input("QUERY DATABASE..."):
+        if user_input := st.chat_input("QUERY DATABASE...", key="tab2_chat"):
             st.session_state.messages.append({"role": "user", "content": user_input})
             with st.chat_message("user"): st.markdown(user_input)
 
@@ -431,12 +411,12 @@ with tab2:
 # ==========================================
 with tab3:
     st.header("👁️ Vision Replicator")
-    uploaded_file = st.file_uploader("UPLOAD INTERFACE IMAGE", type=['png', 'jpg', 'jpeg'])
+    uploaded_file = st.file_uploader("UPLOAD INTERFACE IMAGE", type=['png', 'jpg', 'jpeg'], key="tab3_upload")
     c1, c2 = st.columns(2)
-    with c1: stack = st.selectbox("TECH STACK", ["Next.js + Tailwind", "React + Three.js", "HTML/CSS"])
-    with c2: vibe = st.text_input("VIBE", placeholder="Cyberpunk, Clean")
+    with c1: stack = st.selectbox("TECH STACK", ["Next.js + Tailwind", "React + Three.js", "HTML/CSS"], key="tab3_stack")
+    with c2: vibe = st.text_input("VIBE", placeholder="Cyberpunk, Clean", key="tab3_vibe")
 
-    if st.button("🧬 GENERATE REPLICA CODE"):
+    if st.button("🧬 GENERATE REPLICA CODE", key="tab3_btn"):
         if not uploaded_file: st.warning("UPLOAD REQUIRED")
         else:
             with st.spinner("ANALYZING PIXELS..."):
@@ -454,7 +434,7 @@ with tab4:
     st.header("📜 History Archive")
     st.caption("Past generations saved locally by API Key.")
     
-    if st.button("🗑️ Clear My History"):
+    if st.button("🗑️ Clear My History", key="tab4_clear"):
         clear_user_history(api_key)
         st.success("History wiped.")
         st.rerun()
