@@ -4,82 +4,54 @@ import google.generativeai as genai
 # --- PAGE SETUP ---
 st.set_page_config(page_title="My Prompt Enhancer", page_icon="⚡")
 
-# --- SIDEBAR: SETTINGS ---
+# --- SIDEBAR ---
 with st.sidebar:
-    st.header("⚙️ App Settings")
-    # This box is where you paste the key from Phase 1
-    api_key = st.text_input("Paste your Gemini API Key here:", type="password")
+    st.header("⚙️ Settings")
+    api_key = st.text_input("Paste your Gemini API Key:", type="password")
     
-    # Dropdown menu to choose the style
-    framework = st.selectbox(
-        "Choose Enhancement Style:", 
-        ["CO-STAR (Best for General Text)", "Chain of Thought (Best for Logic)", "Python Coder (Best for Code)"]
-    )
+    # DEBUGGER: This button checks what models you have access to
+    if st.button("🐞 Check Available Models"):
+        if not api_key:
+            st.error("Paste API key first!")
+        else:
+            try:
+                genai.configure(api_key=api_key)
+                st.write("---")
+                st.write("**Your Valid Models:**")
+                # This asks Google for the list
+                for m in genai.list_models():
+                    if 'generateContent' in m.supported_generation_methods:
+                        st.code(m.name)
+            except Exception as e:
+                st.error(f"Error: {e}")
 
-# --- MAIN PAGE ---
+# --- MAIN APP ---
 st.title("⚡ My Personal Prompt Enhancer")
-st.write("Turn a lazy idea into a professional AI instruction.")
+st.info("If you get a 404 error, use the sidebar button to find the correct model name.")
 
-# The box where you type your draft
-raw_prompt = st.text_area("Type your lazy idea here:", height=150, placeholder="Example: write an email to my boss asking for a raise...")
+# 1. Paste the Model Name here (Copy it from the sidebar result)
+model_name = st.text_input("Enter Model Name (e.g., gemini-1.5-flash):", value="gemini-1.5-flash")
 
-# --- THE AI BRAIN ---
+raw_prompt = st.text_area("Type your lazy idea here:", height=150)
+
 if st.button("✨ Enhance My Prompt", type="primary"):
-    
-    # 1. Check if the key is missing
     if not api_key:
-        st.error("⚠️ Stop! You forgot to paste your API Key in the sidebar on the left.")
-    
-    # 2. Check if the prompt is missing
-    elif not raw_prompt:
-        st.warning("⚠️ Please type something in the box first.")
-        
-    # 3. Run the AI
+        st.error("⚠️ Missing API Key")
     else:
         try:
-            # Connect to Google
             genai.configure(api_key=api_key)
-            model = genai.GenerativeModel('gemini-pro')
-
-            # The Secret Instructions (Meta-Prompts)
-            meta_prompts = {
-                "CO-STAR (Best for General Text)": f"""
-                Act as an Expert Prompt Engineer. Rewrite the user's raw idea into the CO-STAR framework.
-                
-                USER'S RAW IDEA: "{raw_prompt}"
-                
-                INSTRUCTIONS:
-                1. Context: Add a realistic background.
-                2. Objective: Clearly define the task.
-                3. Style: Make it professional.
-                4. Tone: Make it clear and direct.
-                5. Audience: Define who is reading this.
-                6. Response: Specify the format (e.g., text, table).
-                
-                OUTPUT: Return ONLY the rewritten prompt inside a code block.
-                """,
-                
-                "Chain of Thought (Best for Logic)": f"""
-                Rewrite this prompt to force the AI to think step-by-step.
-                USER'S RAW IDEA: "{raw_prompt}"
-                Output a prompt that instructs the AI to: "Think step by step" and "Explain your reasoning before giving the answer."
-                """,
-                
-                "Python Coder (Best for Code)": f"""
-                Act as a Senior Python Developer. Rewrite this request into a technical spec.
-                USER'S RAW IDEA: "{raw_prompt}"
-                Ensure the new prompt asks for: Error handling, comments, and clean code.
-                """
-            }
-
-            # Show a loading spinner
+            
+            # Use the model name you typed in the box
+            model = genai.GenerativeModel(model_name)
+            
             with st.spinner("Engineering your prompt..."):
-                response = model.generate_content(meta_prompts[framework])
+                # Simple CO-STAR Framework
+                response = model.generate_content(f"""
+                Act as an Expert Prompt Engineer. Rewrite this using the CO-STAR framework.
+                Input: "{raw_prompt}"
+                Output: The rewritten prompt in a code block.
+                """)
+                st.code(response.text)
                 
-            # Show the result
-            st.subheader("🚀 Copy This Result:")
-            st.code(response.text)
-            st.success("Now copy the text above and paste it into ChatGPT or Claude!")
-
         except Exception as e:
-            st.error(f"Something went wrong: {e}")
+            st.error(f"Error: {e}")
