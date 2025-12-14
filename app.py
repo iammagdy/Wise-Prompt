@@ -40,7 +40,6 @@ if not api_key:
 genai.configure(api_key=api_key)
 
 # GLOBAL MODEL SELECTOR
-# This box lets you type the name that ACTUALLY works for you (e.g., gemini-pro)
 st.info("If you get a 404 error, use the 'Check Available Models' button in the sidebar and paste a valid name below.")
 user_model_name = st.text_input("Model Name:", value="gemini-1.5-flash")
 
@@ -109,7 +108,35 @@ elif mode == "🕷️ Website Replicator":
                     site_text = soup.get_text(separator=' ', strip=True)[:10000]
                     
                 with st.spinner("🧠 Analyzing design & structure..."):
-                    # 2. USE THE USER'S MODEL NAME (This was the fix!)
                     model = genai.GenerativeModel(user_model_name)
                     
+                    # This block is where you had the error. 
+                    # I have ensured the opening (f""") and closing (""") quotes are correct.
                     analysis_prompt = f"""
+                    Act as a Senior UI/UX Designer and Frontend Developer.
+                    I have scraped the text content of a website below.
+                    
+                    YOUR TASK:
+                    Write a comprehensive "System Prompt" that I can give to an AI coding agent (like Cursor, v0, or ChatGPT) to REPLICATE this website.
+                    
+                    The prompt you write must describe:
+                    1. The Vibe/Aesthetics (guess colors/fonts based on content tone).
+                    2. The Structure (Hero, Features, Footer, etc.).
+                    3. The Content Strategy.
+                    4. The exact technical instruction to build it (HTML/Tailwind/React).
+                    
+                    SCRAPED WEBSITE CONTENT:
+                    "{site_text}"
+                    
+                    OUTPUT:
+                    Provide ONLY the prompt I should use, inside a code block.
+                    """
+                    
+                    response = model.generate_content(analysis_prompt)
+                    
+                    st.success("Analysis Complete! Copy the prompt below to build your clone.")
+                    st.subheader("🧬 The Replication Prompt:")
+                    st.code(response.text, language='markdown')
+                    
+            except Exception as e:
+                st.error(f"Error: {e}")
