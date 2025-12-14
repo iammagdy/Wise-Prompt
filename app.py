@@ -11,6 +11,32 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
+# --- HELPER FUNCTION: SELF-HEALING AI ---
+def generate_with_fallback(user_model_name, prompt):
+    """
+    Tries the user's selected model. If it fails (404), 
+    it automatically switches to 'gemini-pro' to save the crash.
+    """
+    try:
+        # 1. Try User's Choice
+        model = genai.GenerativeModel(user_model_name)
+        return model.generate_content(prompt)
+    except Exception as e:
+        # 2. Check for 404 (Model Not Found)
+        if "404" in str(e) or "not found" in str(e).lower():
+            st.warning(f"⚠️ Model '{user_model_name}' not found. Switching to backup 'gemini-pro'...")
+            try:
+                # 3. Try Backup
+                backup_model = genai.GenerativeModel("gemini-pro")
+                return backup_model.generate_content(prompt)
+            except Exception as e2:
+                st.error(f"❌ Backup failed too. Your API Key might be invalid. Error: {e2}")
+                return None
+        else:
+            # Real error (like Policy Violation)
+            st.error(f"❌ Error: {e}")
+            return None
+
 # --- SIDEBAR: GLOBAL SETTINGS ---
 with st.sidebar:
     st.header("⚙️ Engine Room")
@@ -20,8 +46,9 @@ with st.sidebar:
     
     # SMART MODEL SELECTOR
     st.subheader("🧠 AI Brain Power")
-    model_name = st.text_input("Model Name:", value="gemini-1.5-flash")
-    st.caption("Tip: Use `gemini-2.0-flash-exp` if your key supports it.")
+    # CHANGED DEFAULT to 'gemini-pro' as it is the most stable
+    model_name = st.text_input("Model Name:", value="gemini-pro") 
+    st.caption("If 'flash' fails, we auto-switch to 'pro'.")
     
     # DEBUGGER
     if st.button("🐞 Check My Available Models"):
@@ -36,9 +63,6 @@ with st.sidebar:
                         st.code(m.name.replace("models/", ""))
             except Exception as e:
                 st.error(f"Error: {e}")
-
-    st.divider()
-    st.info("Created with the 'No-Code' Guide.")
 
 # --- MAIN APP ---
 st.title("⚡ God-Mode AI Suite")
@@ -62,7 +86,6 @@ with tab1:
     
     col1, col2 = st.columns([1, 2])
     with col1:
-        # EXPANDED OPTIONS
         mode = st.selectbox(
             "Choose Enhancement Mode:",
             [
@@ -70,58 +93,67 @@ with tab1:
                 "Chain of Thought (Best for Logic/Math)", 
                 "Senior Coder (Best for Python/JS)",
                 "Email Polisher (Best for Professionalism)",
-                "Midjourney/Dal-E (Best for Image Gen)"
+                "Midjourney/Dal-E (Best for Image Gen)",
+                "Custom Persona (Define your own Agent)"
             ]
         )
-    
+        
+        agent_name = "Expert Prompt Engineer"
+        if mode == "Custom Persona (Define your own Agent)":
+            agent_name = st.text_input("Who should the AI act as?", placeholder="e.g. Steve Jobs, Elon Musk")
+
     raw_prompt = st.text_area("Your Draft:", height=200, placeholder="e.g., write a marketing plan for coffee...")
 
     if st.button("✨ Enhance Prompt", type="primary"):
         if not raw_prompt:
             st.warning("Type something first!")
         else:
-            try:
-                model = genai.GenerativeModel(model_name)
-                with st.spinner("Engineering your prompt..."):
-                    
-                    # DEFINING THE "BRAINS" FOR EACH MODE
-                    prompts = {
-                        "CO-STAR (Best for General Text)": f"""
-                        Act as an Expert Prompt Engineer. Rewrite this using the CO-STAR framework (Context, Objective, Style, Tone, Audience, Response).
-                        INPUT: "{raw_prompt}"
-                        OUTPUT: The rewritten prompt in a code block.
-                        """,
-                        
-                        "Chain of Thought (Best for Logic/Math)": f"""
-                        Rewrite this prompt to force the AI to think step-by-step.
-                        INPUT: "{raw_prompt}"
-                        OUTPUT: A prompt that instructs the AI to 'Take a deep breath' and 'Show reasoning before the answer'.
-                        """,
-                        
-                        "Senior Coder (Best for Python/JS)": f"""
-                        Act as a Senior Software Architect. Rewrite this request into a technical specification.
-                        INPUT: "{raw_prompt}"
-                        OUTPUT: A prompt asking for clean code, error handling, and comments.
-                        """,
-                        
-                        "Email Polisher (Best for Professionalism)": f"""
-                        Act as a Communications Director. Rewrite this draft into a polite, professional, and clear email prompt.
-                        INPUT: "{raw_prompt}"
-                        OUTPUT: A prompt that asks the AI to write the final email.
-                        """,
-                        
-                        "Midjourney/Dal-E (Best for Image Gen)": f"""
-                        Act as a Digital Artist. Rewrite this idea into a detailed image generation prompt.
-                        INPUT: "{raw_prompt}"
-                        OUTPUT: A prompt including lighting, style (e.g. Cyberpunk), camera angles, and rendering engine details (e.g. Unreal Engine 5).
-                        """
-                    }
-                    
-                    response = model.generate_content(prompts[mode])
+            with st.spinner("Engineering your prompt..."):
+                
+                # LOGIC
+                if mode == "Custom Persona (Define your own Agent)":
+                    system_prompt = f"""
+                    Act as {agent_name}. Rewrite the following user request exactly how {agent_name} would handle it.
+                    INPUT: "{raw_prompt}"
+                    OUTPUT: The rewritten prompt in a code block.
+                    """
+                elif mode == "CO-STAR (Best for General Text)":
+                    system_prompt = f"""
+                    Act as an Expert Prompt Engineer. Rewrite this using the CO-STAR framework (Context, Objective, Style, Tone, Audience, Response).
+                    INPUT: "{raw_prompt}"
+                    OUTPUT: The rewritten prompt in a code block.
+                    """
+                elif mode == "Chain of Thought (Best for Logic/Math)":
+                    system_prompt = f"""
+                    Rewrite this prompt to force the AI to think step-by-step.
+                    INPUT: "{raw_prompt}"
+                    OUTPUT: A prompt that instructs the AI to 'Take a deep breath' and 'Show reasoning before the answer'.
+                    """
+                elif mode == "Senior Coder (Best for Python/JS)":
+                    system_prompt = f"""
+                    Act as a Senior Software Architect. Rewrite this request into a technical specification.
+                    INPUT: "{raw_prompt}"
+                    OUTPUT: A prompt asking for clean code, error handling, and comments.
+                    """
+                elif mode == "Email Polisher (Best for Professionalism)":
+                    system_prompt = f"""
+                    Act as a Communications Director. Rewrite this draft into a polite, professional, and clear email prompt.
+                    INPUT: "{raw_prompt}"
+                    OUTPUT: A prompt that asks the AI to write the final email.
+                    """
+                elif mode == "Midjourney/Dal-E (Best for Image Gen)":
+                    system_prompt = f"""
+                    Act as a Digital Artist. Rewrite this idea into a detailed image generation prompt.
+                    INPUT: "{raw_prompt}"
+                    OUTPUT: A prompt including lighting, style, camera angles, and rendering engine details.
+                    """
+                
+                # EXECUTE WITH SELF-HEALING
+                response = generate_with_fallback(model_name, system_prompt)
+                
+                if response:
                     st.subheader("🚀 Result:")
                     st.code(response.text)
-            except Exception as e:
-                st.error(f"Error: {e}")
 
 # ==========================================
 # TOOL 2: THE WEBSITE REPLICATOR (V3)
@@ -129,13 +161,11 @@ with tab1:
 with tab2:
     st.header("🕷️ Clone a Website's Soul")
     
-    # Initialize Session State
     if 'scraped_text' not in st.session_state:
         st.session_state.scraped_text = ""
     if 'site_title' not in st.session_state:
         st.session_state.site_title = ""
 
-    # INPUT URL
     url = st.text_input("Target Website URL:", placeholder="https://example.com")
     
     if st.button("🕷️ Scan Website"):
@@ -153,54 +183,55 @@ with tab2:
                 except Exception as e:
                     st.error(f"Scan failed: {e}")
 
-    # REFINEMENT FORM
     if st.session_state.scraped_text:
         st.divider()
         st.subheader("2️⃣ Director's Cut (Customize It)")
         
-        c1, c2, c3 = st.columns(3)
+        c1, c2 = st.columns(2)
         with c1:
-            role = st.text_input("Role:", placeholder="SaaS, Portfolio, Store")
+            brand_name = st.text_input("Agent / Brand Name:", value=st.session_state.site_title)
         with c2:
-            vibe = st.text_input("Vibe:", placeholder="Dark, Minimal, Colorful")
+            role = st.text_input("Industry / Role:", placeholder="e.g. SaaS, Portfolio")
+            
+        c3, c4 = st.columns(2)
         with c3:
-            # Dropdown for Tech Stack
+            vibe = st.text_input("Visual Vibe:", placeholder="Dark, Minimal, Colorful")
+        with c4:
             stack = st.selectbox("Tech Stack:", ["Next.js + Tailwind + Framer", "HTML + CSS + JS", "Vue.js + Tailwind", "React + Three.js (3D)"])
 
-        # THE MAGIC BOX
         magic = st.text_area("✨ Describe the Magic (Animations/Interactions):", 
-                             placeholder="IMPORTANT: Describe what moves. e.g., 'A 3D cube spins on hover', 'Text fades in on scroll'.")
+                             placeholder="IMPORTANT: Describe what moves. e.g., 'A 3D cube spins on hover'.")
 
         if st.button("🚀 Generate Replicator Prompt", type="primary"):
-            try:
-                model = genai.GenerativeModel(model_name)
-                with st.spinner("Synthesizing Code Strategy..."):
-                    
-                    final_prompt = f"""
-                    Act as a Senior Frontend Architect.
-                    TASK: Create a system prompt for an AI Coding Agent (Cursor/v0) to REPLICATE this website.
-                    
-                    ### 1. SOURCE DATA
-                    * **Title:** {st.session_state.site_title}
-                    * **Content Summary:** "{st.session_state.scraped_text[:2000]}..."
-                    
-                    ### 2. USER VISION
-                    * **Role:** {role}
-                    * **Vibe:** {vibe}
-                    * **Tech Stack:** {stack}
-                    * **REQUIRED ANIMATIONS (Crucial):** {magic}
-                    
-                    ### 3. INSTRUCTIONS
-                    Write a prompt that instructs the AI to:
-                    1. Use the defined Tech Stack ({stack}).
-                    2. If the user described 3D/Physics in the 'Animations' section, explicitly recommend libraries like Three.js or Matter.js.
-                    3. Structure the Scraped Content into a beautiful layout matching the '{vibe}'.
-                    
-                    OUTPUT: Provide ONLY the prompt in a code block.
-                    """
-                    
-                    response = model.generate_content(final_prompt)
+            with st.spinner("Synthesizing Code Strategy..."):
+                
+                final_prompt = f"""
+                Act as a Senior Frontend Architect.
+                TASK: Create a system prompt for an AI Coding Agent (Cursor/v0) to REPLICATE this website.
+                
+                ### 1. SOURCE DATA
+                * **Brand Name:** {brand_name}
+                * **Original Title:** {st.session_state.site_title}
+                * **Content Summary:** "{st.session_state.scraped_text[:2000]}..."
+                
+                ### 2. USER VISION
+                * **Role:** {role}
+                * **Vibe:** {vibe}
+                * **Tech Stack:** {stack}
+                * **REQUIRED ANIMATIONS (Crucial):** {magic}
+                
+                ### 3. INSTRUCTIONS
+                Write a prompt that instructs the AI to:
+                1. Use the defined Tech Stack ({stack}).
+                2. If the user described 3D/Physics in the 'Animations' section, explicitly recommend libraries like Three.js or Matter.js.
+                3. Structure the Scraped Content into a beautiful layout for '{brand_name}' matching the '{vibe}'.
+                
+                OUTPUT: Provide ONLY the prompt in a code block.
+                """
+                
+                # EXECUTE WITH SELF-HEALING
+                response = generate_with_fallback(model_name, final_prompt)
+                
+                if response:
                     st.subheader("🧬 Your Master Prompt:")
                     st.code(response.text, language='markdown')
-            except Exception as e:
-                st.error(f"Error: {e}")
