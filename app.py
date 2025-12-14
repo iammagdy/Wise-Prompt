@@ -162,8 +162,24 @@ with st.sidebar:
     st.header("⚙️ SYSTEM CONTROL")
     api_key = st.text_input("API KEY", type="password")
     st.divider()
-    model_name = st.selectbox("MODEL", ["gemini-2.0-flash-exp", "gemini-1.5-pro", "gemini-1.5-flash"])
-    st.caption("Use 'gemini-2.0-flash-exp' for Vision/Images.")
+    
+    # --- NEW MODEL SELECTOR ---
+    model_options = [
+        "gemini-2.0-flash-exp", 
+        "gemini-3-pro-preview", 
+        "gemini-2.5-flash", 
+        "gemini-1.5-pro", 
+        "gemini-1.5-flash",
+        "Custom (Type new...)"
+    ]
+    selected_option = st.selectbox("MODEL", model_options)
+    
+    if selected_option == "Custom (Type new...)":
+        model_name = st.text_input("ENTER CUSTOM MODEL NAME", value="gemini-2.0-flash-exp")
+    else:
+        model_name = selected_option
+        
+    st.caption(f"Active Model: `{model_name}`")
     
     if st.button("🐞 SYSTEM CHECK"):
         if not api_key:
