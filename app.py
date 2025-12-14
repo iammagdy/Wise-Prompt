@@ -11,46 +11,33 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# --- HELPER FUNCTION: SELF-HEALING AI ---
+# --- HELPER: SELF-HEALING AI ---
 def generate_with_fallback(user_model_name, prompt):
-    """
-    Tries the user's selected model. If it fails (404), 
-    it automatically switches to 'gemini-pro' to save the crash.
-    """
     try:
-        # 1. Try User's Choice
         model = genai.GenerativeModel(user_model_name)
         return model.generate_content(prompt)
     except Exception as e:
-        # 2. Check for 404 (Model Not Found)
         if "404" in str(e) or "not found" in str(e).lower():
             st.warning(f"⚠️ Model '{user_model_name}' not found. Switching to backup 'gemini-pro'...")
             try:
-                # 3. Try Backup
                 backup_model = genai.GenerativeModel("gemini-pro")
                 return backup_model.generate_content(prompt)
             except Exception as e2:
-                st.error(f"❌ Backup failed too. Your API Key might be invalid. Error: {e2}")
+                st.error(f"❌ Backup failed. Check API Key. Error: {e2}")
                 return None
         else:
-            # Real error (like Policy Violation)
             st.error(f"❌ Error: {e}")
             return None
 
-# --- SIDEBAR: GLOBAL SETTINGS ---
+# --- SIDEBAR ---
 with st.sidebar:
     st.header("⚙️ Engine Room")
     api_key = st.text_input("🔑 Paste Gemini API Key:", type="password")
     
     st.divider()
-    
-    # SMART MODEL SELECTOR
-    st.subheader("🧠 AI Brain Power")
-    # CHANGED DEFAULT to 'gemini-pro' as it is the most stable
     model_name = st.text_input("Model Name:", value="gemini-pro") 
-    st.caption("If 'flash' fails, we auto-switch to 'pro'.")
+    st.caption("Auto-switches if 404 error occurs.")
     
-    # DEBUGGER
     if st.button("🐞 Check My Available Models"):
         if not api_key:
             st.error("Paste API Key first!")
@@ -72,91 +59,149 @@ if not api_key:
     st.warning("⬅️ Waiting for API Key in the sidebar...")
     st.stop()
 
-# Configure AI Globally
 genai.configure(api_key=api_key)
 
-# --- TABS FOR TOOLS ---
+# --- TABS ---
 tab1, tab2 = st.tabs(["✨ Prompt Enhancer (Writer)", "🕷️ Website Replicator (Builder)"])
 
 # ==========================================
-# TOOL 1: THE PROMPT ENHANCER
+# TAB 1: THE PROMPT ENHANCER (Updated)
 # ==========================================
 with tab1:
     st.header("✨ Turn Lazy Ideas into Gold")
     
     col1, col2 = st.columns([1, 2])
     with col1:
+        # THE NEW "AUTO-DETECT" IS THE DEFAULT
         mode = st.selectbox(
-            "Choose Enhancement Mode:",
+            "Choose Strategy:",
             [
-                "CO-STAR (Best for General Text)", 
-                "Chain of Thought (Best for Logic/Math)", 
-                "Senior Coder (Best for Python/JS)",
-                "Email Polisher (Best for Professionalism)",
-                "Midjourney/Dal-E (Best for Image Gen)",
-                "Custom Persona (Define your own Agent)"
+                "✨ Auto-Detect (AI Decides Best Fit)", 
+                "⚡ Vibe Coder (Bolt/Antigravity)", 
+                "CO-STAR (General Writing)", 
+                "Chain of Thought (Logic/Math)", 
+                "Senior Coder (Python/JS)",
+                "Email Polisher (Professional)",
+                "Midjourney/Dal-E (Image Gen)",
+                "S.M.A.R.T. (Business Goals)", # NEW
+                "The 5 Ws (News/Reporting)"    # NEW
             ]
         )
         
-        agent_name = "Expert Prompt Engineer"
-        if mode == "Custom Persona (Define your own Agent)":
-            agent_name = st.text_input("Who should the AI act as?", placeholder="e.g. Steve Jobs, Elon Musk")
+        # LOGIC FOR MANUAL MODES
+        vibe_type = "Genesis (New Project)" 
+        if mode == "⚡ Vibe Coder (Bolt/Antigravity)":
+            vibe_type = st.radio("Stage?", ["Genesis (Start)", "Refiner (Polish)", "Logic Fixer (Bugs)"])
+        
+        agent_name = "Expert"
+        if mode == "Custom Persona":
+            agent_name = st.text_input("Who should the AI act as?", placeholder="e.g. Steve Jobs")
 
-    raw_prompt = st.text_area("Your Draft:", height=200, placeholder="e.g., write a marketing plan for coffee...")
+    raw_prompt = st.text_area("Your Request:", height=200, placeholder="e.g., build a dashboard, OR write a angry email, OR solve a riddle...")
 
     if st.button("✨ Enhance Prompt", type="primary"):
         if not raw_prompt:
             st.warning("Type something first!")
         else:
-            with st.spinner("Engineering your prompt..."):
+            with st.spinner("🧠 Analyzing complexity & choosing framework..."):
                 
-                # LOGIC
-                if mode == "Custom Persona (Define your own Agent)":
-                    system_prompt = f"""
-                    Act as {agent_name}. Rewrite the following user request exactly how {agent_name} would handle it.
-                    INPUT: "{raw_prompt}"
-                    OUTPUT: The rewritten prompt in a code block.
-                    """
-                elif mode == "CO-STAR (Best for General Text)":
-                    system_prompt = f"""
-                    Act as an Expert Prompt Engineer. Rewrite this using the CO-STAR framework (Context, Objective, Style, Tone, Audience, Response).
-                    INPUT: "{raw_prompt}"
-                    OUTPUT: The rewritten prompt in a code block.
-                    """
-                elif mode == "Chain of Thought (Best for Logic/Math)":
-                    system_prompt = f"""
-                    Rewrite this prompt to force the AI to think step-by-step.
-                    INPUT: "{raw_prompt}"
-                    OUTPUT: A prompt that instructs the AI to 'Take a deep breath' and 'Show reasoning before the answer'.
-                    """
-                elif mode == "Senior Coder (Best for Python/JS)":
-                    system_prompt = f"""
-                    Act as a Senior Software Architect. Rewrite this request into a technical specification.
-                    INPUT: "{raw_prompt}"
-                    OUTPUT: A prompt asking for clean code, error handling, and comments.
-                    """
-                elif mode == "Email Polisher (Best for Professionalism)":
-                    system_prompt = f"""
-                    Act as a Communications Director. Rewrite this draft into a polite, professional, and clear email prompt.
-                    INPUT: "{raw_prompt}"
-                    OUTPUT: A prompt that asks the AI to write the final email.
-                    """
-                elif mode == "Midjourney/Dal-E (Best for Image Gen)":
-                    system_prompt = f"""
-                    Act as a Digital Artist. Rewrite this idea into a detailed image generation prompt.
-                    INPUT: "{raw_prompt}"
-                    OUTPUT: A prompt including lighting, style, camera angles, and rendering engine details.
-                    """
+                # --- 1. AUTO-DETECT INTELLIGENCE LAYER ---
+                target_mode = mode # Default to what user picked
                 
-                # EXECUTE WITH SELF-HEALING
+                if mode == "✨ Auto-Detect (AI Decides Best Fit)":
+                    # We ask the AI to categorize the prompt first
+                    classifier_prompt = f"""
+                    Analyze this user request: "{raw_prompt}"
+                    
+                    Classify it into ONE of these categories based on the user's intent:
+                    - CODE_GENESIS (If building a new app/website)
+                    - CODE_FIX (If asking to fix a bug)
+                    - WRITING (If writing an article, blog, or text)
+                    - LOGIC (If a math problem, riddle, or complex reasoning)
+                    - EMAIL (If sending a message/reply)
+                    - IMAGE (If describing a picture)
+                    - PLAN (If setting goals or business strategy)
+
+                    OUTPUT ONLY THE CATEGORY NAME.
+                    """
+                    classification = generate_with_fallback(model_name, classifier_prompt)
+                    
+                    # Map the AI's classification to our Frameworks
+                    detected_category = classification.text.strip().upper() if classification else "WRITING"
+                    
+                    if "CODE_GENESIS" in detected_category:
+                        target_mode = "⚡ Vibe Coder (Bolt/Antigravity)"
+                        vibe_type = "Genesis (New Project)"
+                        st.info("🤖 AI Detected: New App Build -> Using **Vibe Coder (Genesis)**")
+                    elif "CODE_FIX" in detected_category:
+                        target_mode = "⚡ Vibe Coder (Bolt/Antigravity)"
+                        vibe_type = "Logic Fixer (Bugs)"
+                        st.info("🤖 AI Detected: Bug Fix -> Using **Vibe Coder (Fixer)**")
+                    elif "LOGIC" in detected_category:
+                        target_mode = "Chain of Thought (Logic/Math)"
+                        st.info("🤖 AI Detected: Logic Puzzle -> Using **Chain of Thought**")
+                    elif "EMAIL" in detected_category:
+                        target_mode = "Email Polisher (Professional)"
+                        st.info("🤖 AI Detected: Email -> Using **Email Polisher**")
+                    elif "IMAGE" in detected_category:
+                        target_mode = "Midjourney/Dal-E (Image Gen)"
+                        st.info("🤖 AI Detected: Image Prompt -> Using **Midjourney Mode**")
+                    elif "PLAN" in detected_category:
+                        target_mode = "S.M.A.R.T. (Business Goals)"
+                        st.info("🤖 AI Detected: Planning -> Using **S.M.A.R.T. Framework**")
+                    else:
+                        target_mode = "CO-STAR (General Writing)"
+                        st.info("🤖 AI Detected: General Text -> Using **CO-STAR**")
+
+                # --- 2. GENERATE SYSTEM PROMPT BASED ON (DETECTED) MODE ---
+                system_prompt = ""
+                
+                # VIBE CODER LOGIC
+                if target_mode == "⚡ Vibe Coder (Bolt/Antigravity)":
+                    if "Genesis" in vibe_type:
+                        system_prompt = f"""
+                        Act as an Expert Prompt Engineer for AI Agents. Rewrite into a 'Genesis Prompt' using CO-STAR.
+                        CRITICAL: Append a '### FEW-SHOT TRAINING' section with 'Bad Output' vs 'Good Output' (Next.js/Tailwind).
+                        INPUT: "{raw_prompt}"
+                        """
+                    elif "Refiner" in vibe_type:
+                        system_prompt = f"""
+                        Act as a UI/UX Director. Rewrite into a 'Refiner Prompt'.
+                        CRITICAL: Append a '### FEW-SHOT TRAINING' section (e.g. 'Make it pop' -> 'shadow-xl').
+                        INPUT: "{raw_prompt}"
+                        """
+                    elif "Fixer" in vibe_type or "Logic" in vibe_type:
+                        system_prompt = f"""
+                        Act as a Senior Backend Engineer. Rewrite into a 'Logic Fixer Prompt'.
+                        CRITICAL: Append a '### FEW-SHOT TRAINING' section about Error Handling.
+                        INPUT: "{raw_prompt}"
+                        """
+
+                # STANDARD LOGIC
+                elif target_mode == "CO-STAR (General Writing)":
+                    system_prompt = f"Act as an Expert Writer. Rewrite using CO-STAR (Context, Objective, Style, Tone, Audience, Response). INPUT: '{raw_prompt}'"
+                elif target_mode == "Chain of Thought (Logic/Math)":
+                    system_prompt = f"Rewrite this prompt to force the AI to think step-by-step. INPUT: '{raw_prompt}'"
+                elif target_mode == "Senior Coder (Python/JS)":
+                    system_prompt = f"Act as a Senior Architect. Rewrite into a technical spec. INPUT: '{raw_prompt}'"
+                elif target_mode == "Email Polisher (Professional)":
+                    system_prompt = f"Act as a Comms Director. Rewrite into a professional email. INPUT: '{raw_prompt}'"
+                elif target_mode == "Midjourney/Dal-E (Image Gen)":
+                    system_prompt = f"Act as a Digital Artist. Rewrite into a detailed image generation prompt (Lighting, Camera, Style). INPUT: '{raw_prompt}'"
+                elif target_mode == "S.M.A.R.T. (Business Goals)":
+                    system_prompt = f"Rewrite this goal using the S.M.A.R.T framework (Specific, Measurable, Achievable, Relevant, Time-bound). INPUT: '{raw_prompt}'"
+                elif target_mode == "The 5 Ws (News/Reporting)":
+                    system_prompt = f"Rewrite this request to ensure it answers: Who, What, Where, When, and Why. INPUT: '{raw_prompt}'"
+
+                # --- 3. EXECUTE ---
                 response = generate_with_fallback(model_name, system_prompt)
                 
                 if response:
-                    st.subheader("🚀 Result:")
+                    st.subheader(f"🚀 Result ({target_mode}):")
                     st.code(response.text)
 
 # ==========================================
-# TOOL 2: THE WEBSITE REPLICATOR (V3)
+# TAB 2: THE WEBSITE REPLICATOR (V3)
 # ==========================================
 with tab2:
     st.header("🕷️ Clone a Website's Soul")
@@ -229,9 +274,7 @@ with tab2:
                 OUTPUT: Provide ONLY the prompt in a code block.
                 """
                 
-                # EXECUTE WITH SELF-HEALING
                 response = generate_with_fallback(model_name, final_prompt)
-                
                 if response:
                     st.subheader("🧬 Your Master Prompt:")
                     st.code(response.text, language='markdown')
