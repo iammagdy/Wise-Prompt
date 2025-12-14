@@ -47,7 +47,7 @@ def recursive_crawl(start_url, max_pages=3):
     headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/91.0.4472.124 Safari/537.36'}
     base_domain = urlparse(start_url).netloc
 
-    status_placeholder = st.empty() # specific UI element for updates
+    status_placeholder = st.empty() # UI element for live updates
 
     count = 0
     while queue and count < max_pages:
@@ -63,17 +63,17 @@ def recursive_crawl(start_url, max_pages=3):
                 
             soup = BeautifulSoup(response.content, 'html.parser')
             
-            # Extract Text
-            text = soup.get_text(separator=' ', strip=True)[:3000] # Limit per page
+            # Extract Text (Cleaned)
+            text = soup.get_text(separator=' ', strip=True)[:4000] # Limit per page to save tokens
             title = soup.title.string if soup.title else "No Title"
             
-            combined_text += f"\n\n--- PAGE: {title} ({url}) ---\n{text}"
+            combined_text += f"\n\n--- PAGE START: {title} ({url}) ---\n{text}\n--- PAGE END ---\n"
             page_summaries.append({"url": url, "title": title})
             
             visited.add(url)
             count += 1
             
-            # Find internal links for the queue
+            # Find internal links
             for link in soup.find_all('a', href=True):
                 href = link['href']
                 full_url = urljoin(url, href)
@@ -88,7 +88,7 @@ def recursive_crawl(start_url, max_pages=3):
         except Exception as e:
             st.warning(f"Skipped {url}: {e}")
             
-    status_placeholder.success(f"✅ Crawled {count} pages successfully!")
+    status_placeholder.success(f"✅ Deep Scan Complete! Crawled {count} pages.")
     return combined_text, page_summaries
 
 # --- SIDEBAR ---
@@ -115,7 +115,7 @@ with st.sidebar:
 
 # --- MAIN APP ---
 st.title("⚡ God-Mode AI Suite")
-st.markdown("Two powerful tools in one app. Select a tab below.")
+st.markdown("The ultimate toolkit for **Vibe Coding** and **Reverse Engineering**.")
 
 if not api_key:
     st.warning("⬅️ Waiting for API Key in the sidebar...")
@@ -124,7 +124,7 @@ if not api_key:
 genai.configure(api_key=api_key)
 
 # --- TABS ---
-tab1, tab2 = st.tabs(["✨ Prompt Enhancer (Interactive)", "🕷️ Website Replicator (Deep Scan)"])
+tab1, tab2 = st.tabs(["✨ Prompt Enhancer (Reasoning Engine)", "🕷️ Website Replicator (Deep Crawler)"])
 
 # ==========================================
 # TAB 1: THE INTERACTIVE PROMPT ENHANCER
@@ -158,26 +158,15 @@ with tab1:
                 ]
             )
             
-            # --- DYNAMIC EXPLANATIONS (The Brief) ---
+            # Brief Explanations
             descriptions = {
-                "✨ Auto-Detect (AI Decides)": "🤖 **Best for:** When you aren't sure. I will analyze your text and pick the perfect framework automatically.",
-                "⚡ Vibe Coder (Bolt/Antigravity)": "💻 **Best for:** AI Agents (Bolt.new, Replit Agent). Generates prompts with 'Few-Shot Examples' to prevent bad code.",
-                "CO-STAR (General Writing)": "📝 **Best for:** Blogs, Essays, Marketing. Uses Context, Objective, Style, Tone, Audience, Response.",
-                "Chain of Thought (Logic)": "🧠 **Best for:** Math, Riddles, Complex Logic. Forces the AI to think step-by-step to avoid errors.",
-                "Senior Coder (Python/JS)": "👨‍💻 **Best for:** Technical specs. Focuses on clean architecture, error handling, and security.",
-                "Email Polisher": "mw **Best for:** Corporate Comms. Turns 'angry notes' into polite, professional emails.",
-                "S.M.A.R.T. (Business)": "📊 **Best for:** Goals & Planning. Ensures outputs are Specific, Measurable, Achievable, Relevant, and Time-bound.",
-                "The 5 Ws (Reporting)": "📰 **Best for:** Journalism & Summaries. Ensures Who, What, Where, When, and Why are covered."
+                "✨ Auto-Detect (AI Decides)": "🤖 I analyze your text and pick the perfect framework automatically.",
+                "⚡ Vibe Coder (Bolt/Antigravity)": "💻 For AI Agents (Bolt/Replit). Adds 'Few-Shot Examples' to prevent bad code.",
+                "CO-STAR (General Writing)": "📝 For Blogs/Emails. Uses Context, Objective, Style, Tone, Audience, Response.",
+                "Chain of Thought (Logic)": "🧠 For Math/Logic. Forces step-by-step thinking.",
             }
-            
-            # Show the description for the selected mode
             if mode in descriptions:
                 st.info(descriptions[mode])
-            
-            # Sub-options for Vibe Coder
-            vibe_type = "Genesis"
-            if mode == "⚡ Vibe Coder (Bolt/Antigravity)":
-                vibe_type = st.radio("Stage?", ["Genesis (Start)", "Refiner (Polish)", "Logic Fixer (Bugs)"])
 
         raw_prompt = st.text_area("Your Request:", height=200, placeholder="e.g., build a crypto dashboard...")
 
@@ -187,18 +176,13 @@ with tab1:
             else:
                 with st.spinner("🧠 Analyzing gaps in your request..."):
                     
+                    # Logic to set target mode based on Auto-Detect
                     target_mode = mode
                     if mode == "✨ Auto-Detect (AI Decides)":
-                         classifier_prompt = f"Classify intent: '{raw_prompt}'. Return ONE word: CODE, BUG, WRITING, LOGIC, EMAIL, PLAN."
+                         classifier_prompt = f"Classify intent: '{raw_prompt}'. Return ONE word: CODE, WRITING, LOGIC, EMAIL."
                          cls = generate_with_fallback(model_name, classifier_prompt)
                          cat = cls.text.strip().upper() if cls else "WRITING"
-                         
-                         if "CODE" in cat: target_mode = "⚡ Vibe Coder (Bolt/Antigravity)"
-                         elif "BUG" in cat: target_mode = "⚡ Vibe Coder (Bolt/Antigravity)"
-                         elif "LOGIC" in cat: target_mode = "Chain of Thought (Logic)"
-                         elif "EMAIL" in cat: target_mode = "Email Polisher"
-                         elif "PLAN" in cat: target_mode = "S.M.A.R.T. (Business)"
-                         else: target_mode = "CO-STAR (General Writing)"
+                         target_mode = "⚡ Vibe Coder (Bolt/Antigravity)" if "CODE" in cat else "CO-STAR (General Writing)"
 
                     analysis_prompt = f"""
                     Analyze this user request: "{raw_prompt}"
@@ -236,7 +220,6 @@ with tab1:
         st.success("✅ Analysis Complete! I found some gaps.")
         
         col_a, col_b = st.columns([1, 1])
-        
         with col_a:
             st.subheader("📄 Draft V1")
             st.code(st.session_state.draft_result, language="markdown")
@@ -247,7 +230,6 @@ with tab1:
         with col_b:
             st.subheader("🕵️ Refinement")
             st.info("The AI suggests answering these:")
-            
             with st.form("discovery_form"):
                 q_list = st.session_state.discovery_questions
                 while len(q_list) < 3: q_list.append("Any extra details?")
@@ -256,9 +238,7 @@ with tab1:
                 q2 = st.text_input(f"2. {q_list[1]}")
                 q3 = st.text_input(f"3. {q_list[2]}")
                 
-                submitted = st.form_submit_button("✨ Update & Finalize")
-                
-                if submitted:
+                if st.form_submit_button("✨ Update & Finalize"):
                     with st.spinner("Synthesizing..."):
                         final_prompt_request = f"""
                         Merge into FINAL PROMPT.
@@ -285,11 +265,14 @@ with tab1:
 # ==========================================
 with tab2:
     st.header("🕷️ Deep Website Scanner")
+    st.info("This tool recursively crawls the site to understand the FULL structure, not just the homepage.")
     
     if 'scraped_text' not in st.session_state:
         st.session_state.scraped_text = ""
     if 'site_map' not in st.session_state:
-        st.session_state.site_map = [] # List of pages found
+        st.session_state.site_map = []
+    if 'site_title' not in st.session_state:
+        st.session_state.site_title = ""
 
     url = st.text_input("Target Website URL:", placeholder="https://example.com")
     
@@ -297,20 +280,19 @@ with tab2:
         if not url:
             st.warning("Need a URL!")
         else:
-            with st.spinner("🕷️ Initializing Recursive Crawler... (This may take 10-20 seconds)"):
-                # RUN THE RECURSIVE CRAWLER
+            with st.spinner("🕷️ Initializing Recursive Crawler..."):
                 full_text, pages = recursive_crawl(url, max_pages=3)
-                
                 st.session_state.scraped_text = full_text
                 st.session_state.site_map = pages
                 st.session_state.site_title = pages[0]['title'] if pages else "Unknown"
 
     if st.session_state.scraped_text:
         st.divider()
-        st.subheader(f"✅ Scanned {len(st.session_state.site_map)} Pages")
-        with st.expander("View Site Map"):
+        st.success(f"✅ Scanned {len(st.session_state.site_map)} Pages Successfully")
+        
+        with st.expander("View Scraped Site Map"):
             for p in st.session_state.site_map:
-                st.write(f"- [{p['title']}]({p['url']})")
+                st.write(f"- **{p['title']}**: {p['url']}")
 
         st.subheader("2️⃣ Director's Cut")
         
@@ -318,7 +300,7 @@ with tab2:
         with c1:
             brand_name = st.text_input("Brand Name:", value=st.session_state.site_title)
         with c2:
-            role = st.text_input("Industry/Role:", placeholder="e.g. SaaS")
+            role = st.text_input("Industry/Role:", placeholder="e.g. SaaS, Portfolio")
             
         c3, c4 = st.columns(2)
         with c3:
@@ -326,39 +308,44 @@ with tab2:
         with c4:
             stack = st.selectbox("Tech Stack:", ["Next.js + Tailwind + Framer", "HTML + CSS + JS", "React + Three.js"])
 
-        magic = st.text_area("✨ Describe Animation Magic:", placeholder="e.g., 'A 3D cube spins on hover'.")
+        magic = st.text_area("✨ Describe Animation Magic:", placeholder="IMPORTANT: Describe 3D objects, scroll effects, or interactions.")
 
         if st.button("🚀 Generate Report & Prompt", type="primary"):
             with st.spinner("Analyzing Deep Data..."):
                 
-                # --- PROMPT FOR DUAL OUTPUT ---
+                # --- DUAL OUTPUT PROMPT ---
                 analysis_request = f"""
-                Act as a Senior Technical Architect.
+                Act as a Senior Technical Architect and Reverse Engineer.
                 
                 SOURCE DATA (From Recursive Crawl):
-                "{st.session_state.scraped_text[:12000]}..."
+                "{st.session_state.scraped_text[:15000]}..."
                 
                 USER CONTEXT:
                 Brand: {brand_name}, Role: {role}, Vibe: {vibe}, Stack: {stack}, Magic: {magic}
                 
                 TASK:
-                Generate TWO distinct outputs separated by a specific delimiter "|||SEPARATOR|||".
+                Generate TWO distinct outputs separated by the delimiter "|||SEPARATOR|||".
                 
-                OUTPUT 1: THE BLUEPRINT REPORT (Markdown)
-                - Overall Summary (What is this site?)
-                - Site Map Analysis (Structure based on crawled pages)
-                - Design System (Colors, Fonts, Patterns inferred from text)
-                - Tech Stack Detection (Guess frameworks based on patterns)
+                ### OUTPUT 1: THE BLUEPRINT REPORT (Markdown)
+                A comprehensive analysis for a human developer to understand the site.
+                - **Executive Summary:** What is this site?
+                - **Site Map Analysis:** The structure based on the pages found.
+                - **Design System Extraction:** * Color Palette (Primary, Secondary, Background).
+                    * Typography (Headings, Body).
+                - **Tech Stack Inference:** What tools likely built this?
+                - **Asset Inventory:** List types of images/icons found.
                 
-                OUTPUT 2: THE BUILDER PROMPT (System Instruction)
-                - A direct system prompt for an AI Agent (Cursor/v0) to build this.
-                - Include specific instructions for {stack} and {magic}.
-                - Include '### FEW-SHOT TRAINING' examples for code quality.
-                
-                FORMAT:
-                [Markdown Report]
                 |||SEPARATOR|||
-                [System Prompt Code Block]
+                
+                ### OUTPUT 2: THE BUILDER PROMPT (System Instruction)
+                A "God-Mode" system prompt for an AI Agent (Cursor/v0) to BUILD this site.
+                - **Role:** Act as Senior Architect.
+                - **Design System:** Enforce the colors/fonts found in the report.
+                - **Architecture:** Define components (Hero, Nav, Footer) based on the scan.
+                - **Interactivity:** Explicitly implement the "{magic}" using Framer Motion/Three.js.
+                - **Few-Shot Training:** Include examples of "Bad Code" vs "Good Code" ({stack}).
+                
+                Output ONLY the two sections separated by the delimiter.
                 """
                 
                 response = generate_with_fallback(model_name, analysis_request)
@@ -367,14 +354,16 @@ with tab2:
                     try:
                         parts = response.text.split("|||SEPARATOR|||")
                         report = parts[0]
-                        builder_prompt = parts[1] if len(parts) > 1 else "Error generating prompt."
+                        builder_prompt = parts[1] if len(parts) > 1 else "Error generating prompt part."
                         
                         # DISPLAY DUAL TABS
                         out_tab1, out_tab2 = st.tabs(["📄 The Blueprint (Report)", "💻 The Builder (Prompt)"])
                         
                         with out_tab1:
                             st.markdown(report)
+                            st.download_button("Download Report", report, file_name="site_report.md")
                         with out_tab2:
+                            st.info("Copy this block into Cursor, Bolt.new, or v0.dev")
                             st.code(builder_prompt, language='markdown')
                             
                     except Exception as e:
