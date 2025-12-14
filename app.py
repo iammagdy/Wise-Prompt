@@ -3,140 +3,204 @@ import google.generativeai as genai
 import requests
 from bs4 import BeautifulSoup
 
-# --- PAGE SETUP ---
-st.set_page_config(page_title="God-Mode Enhancer", page_icon="⚡", layout="wide")
+# --- PAGE CONFIGURATION ---
+st.set_page_config(
+    page_title="God-Mode AI Suite",
+    page_icon="⚡",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
 
-# --- SIDEBAR ---
+# --- SIDEBAR: GLOBAL SETTINGS ---
 with st.sidebar:
-    st.header("⚙️ Settings")
-    api_key = st.text_input("Paste Gemini API Key:", type="password")
+    st.header("⚙️ Engine Room")
+    api_key = st.text_input("🔑 Paste Gemini API Key:", type="password")
     
-    # Mode Selector
-    mode = st.radio("Select Mode:", ["✨ Text Prompt Enhancer", "🕷️ Website Replicator"])
+    st.divider()
     
-    st.markdown("---")
-    # Debugger to find your working model name
-    if st.button("🐞 Check Available Models"):
+    # SMART MODEL SELECTOR
+    st.subheader("🧠 AI Brain Power")
+    model_name = st.text_input("Model Name:", value="gemini-1.5-flash")
+    st.caption("Tip: Use `gemini-2.0-flash-exp` if your key supports it.")
+    
+    # DEBUGGER
+    if st.button("🐞 Check My Available Models"):
         if not api_key:
-            st.error("Paste API key first!")
+            st.error("Paste API Key first!")
         else:
             try:
                 genai.configure(api_key=api_key)
-                st.write("**Your Valid Models:**")
+                st.write("✅ **Your Key supports:**")
                 for m in genai.list_models():
                     if 'generateContent' in m.supported_generation_methods:
-                        st.code(m.name)
+                        st.code(m.name.replace("models/", ""))
             except Exception as e:
                 st.error(f"Error: {e}")
 
+    st.divider()
+    st.info("Created with the 'No-Code' Guide.")
+
 # --- MAIN APP ---
 st.title("⚡ God-Mode AI Suite")
+st.markdown("Two powerful tools in one app. Select a tab below.")
 
 if not api_key:
-    st.warning("⬅️ Please paste your Gemini API Key in the sidebar to start.")
+    st.warning("⬅️ Waiting for API Key in the sidebar...")
     st.stop()
 
-# Configure the API key globally
+# Configure AI Globally
 genai.configure(api_key=api_key)
 
-# GLOBAL MODEL SELECTOR
-st.info("If you get a 404 error, use the 'Check Available Models' button in the sidebar and paste a valid name below.")
-user_model_name = st.text_input("Model Name:", value="gemini-1.5-flash")
+# --- TABS FOR TOOLS ---
+tab1, tab2 = st.tabs(["✨ Prompt Enhancer (Writer)", "🕷️ Website Replicator (Builder)"])
 
 # ==========================================
-# MODE 1: STANDARD PROMPT ENHANCER
+# TOOL 1: THE PROMPT ENHANCER
 # ==========================================
-if mode == "✨ Text Prompt Enhancer":
-    st.subheader("Turn lazy ideas into engineering-grade prompts.")
+with tab1:
+    st.header("✨ Turn Lazy Ideas into Gold")
     
-    framework = st.selectbox("Style:", ["CO-STAR (Best for Text)", "Chain of Thought (Logic)", "Python Expert (Code)"])
-    raw_prompt = st.text_area("Your Lazy Draft:", height=200, placeholder="e.g., write a marketing plan for coffee...")
+    col1, col2 = st.columns([1, 2])
+    with col1:
+        # EXPANDED OPTIONS
+        mode = st.selectbox(
+            "Choose Enhancement Mode:",
+            [
+                "CO-STAR (Best for General Text)", 
+                "Chain of Thought (Best for Logic/Math)", 
+                "Senior Coder (Best for Python/JS)",
+                "Email Polisher (Best for Professionalism)",
+                "Midjourney/Dal-E (Best for Image Gen)"
+            ]
+        )
+    
+    raw_prompt = st.text_area("Your Draft:", height=200, placeholder="e.g., write a marketing plan for coffee...")
 
     if st.button("✨ Enhance Prompt", type="primary"):
         if not raw_prompt:
-            st.warning("Enter a prompt first.")
+            st.warning("Type something first!")
         else:
             try:
-                # USE THE USER'S MODEL NAME
-                model = genai.GenerativeModel(user_model_name)
-                
+                model = genai.GenerativeModel(model_name)
                 with st.spinner("Engineering your prompt..."):
-                    meta_prompts = {
-                        "CO-STAR (Best for Text)": f"""
-                        Act as an Expert Prompt Engineer. Rewrite this using the CO-STAR framework.
-                        Input: "{raw_prompt}"
-                        Output: The rewritten prompt in a code block.
+                    
+                    # DEFINING THE "BRAINS" FOR EACH MODE
+                    prompts = {
+                        "CO-STAR (Best for General Text)": f"""
+                        Act as an Expert Prompt Engineer. Rewrite this using the CO-STAR framework (Context, Objective, Style, Tone, Audience, Response).
+                        INPUT: "{raw_prompt}"
+                        OUTPUT: The rewritten prompt in a code block.
                         """,
-                        "Chain of Thought (Logic)": f"""
-                        Rewrite to force step-by-step logic.
-                        Input: "{raw_prompt}"
-                        Output: A prompt that requires "Step-by-step reasoning".
+                        
+                        "Chain of Thought (Best for Logic/Math)": f"""
+                        Rewrite this prompt to force the AI to think step-by-step.
+                        INPUT: "{raw_prompt}"
+                        OUTPUT: A prompt that instructs the AI to 'Take a deep breath' and 'Show reasoning before the answer'.
                         """,
-                        "Python Expert (Code)": f"""
-                        Act as a Senior Dev. Rewrite for Python.
-                        Input: "{raw_prompt}"
-                        Output: Technical spec prompt.
+                        
+                        "Senior Coder (Best for Python/JS)": f"""
+                        Act as a Senior Software Architect. Rewrite this request into a technical specification.
+                        INPUT: "{raw_prompt}"
+                        OUTPUT: A prompt asking for clean code, error handling, and comments.
+                        """,
+                        
+                        "Email Polisher (Best for Professionalism)": f"""
+                        Act as a Communications Director. Rewrite this draft into a polite, professional, and clear email prompt.
+                        INPUT: "{raw_prompt}"
+                        OUTPUT: A prompt that asks the AI to write the final email.
+                        """,
+                        
+                        "Midjourney/Dal-E (Best for Image Gen)": f"""
+                        Act as a Digital Artist. Rewrite this idea into a detailed image generation prompt.
+                        INPUT: "{raw_prompt}"
+                        OUTPUT: A prompt including lighting, style (e.g. Cyberpunk), camera angles, and rendering engine details (e.g. Unreal Engine 5).
                         """
                     }
-                    response = model.generate_content(meta_prompts[framework])
+                    
+                    response = model.generate_content(prompts[mode])
                     st.subheader("🚀 Result:")
                     st.code(response.text)
             except Exception as e:
                 st.error(f"Error: {e}")
 
 # ==========================================
-# MODE 2: WEBSITE REPLICATOR
+# TOOL 2: THE WEBSITE REPLICATOR (V3)
 # ==========================================
-elif mode == "🕷️ Website Replicator":
-    st.subheader("Clone a website's style and structure.")
-    st.info("Enter a URL, and I will write a prompt to help you build a clone of it.")
+with tab2:
+    st.header("🕷️ Clone a Website's Soul")
+    
+    # Initialize Session State
+    if 'scraped_text' not in st.session_state:
+        st.session_state.scraped_text = ""
+    if 'site_title' not in st.session_state:
+        st.session_state.site_title = ""
 
-    target_url = st.text_input("Enter Website URL (e.g., https://example.com):")
-
-    if st.button("🕷️ Crawl & Generate Super-Prompt", type="primary"):
-        if not target_url:
-            st.warning("Please enter a URL.")
+    # INPUT URL
+    url = st.text_input("Target Website URL:", placeholder="https://example.com")
+    
+    if st.button("🕷️ Scan Website"):
+        if not url:
+            st.warning("Need a URL!")
         else:
+            with st.spinner("Reading website..."):
+                try:
+                    headers = {'User-Agent': 'Mozilla/5.0'}
+                    r = requests.get(url, headers=headers, timeout=10)
+                    soup = BeautifulSoup(r.content, 'html.parser')
+                    st.session_state.site_title = soup.title.string if soup.title else "Unknown"
+                    st.session_state.scraped_text = soup.get_text(separator=' ', strip=True)[:10000]
+                    st.success(f"✅ Scanned: {st.session_state.site_title}")
+                except Exception as e:
+                    st.error(f"Scan failed: {e}")
+
+    # REFINEMENT FORM
+    if st.session_state.scraped_text:
+        st.divider()
+        st.subheader("2️⃣ Director's Cut (Customize It)")
+        
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            role = st.text_input("Role:", placeholder="SaaS, Portfolio, Store")
+        with c2:
+            vibe = st.text_input("Vibe:", placeholder="Dark, Minimal, Colorful")
+        with c3:
+            # Dropdown for Tech Stack
+            stack = st.selectbox("Tech Stack:", ["Next.js + Tailwind + Framer", "HTML + CSS + JS", "Vue.js + Tailwind", "React + Three.js (3D)"])
+
+        # THE MAGIC BOX
+        magic = st.text_area("✨ Describe the Magic (Animations/Interactions):", 
+                             placeholder="IMPORTANT: Describe what moves. e.g., 'A 3D cube spins on hover', 'Text fades in on scroll'.")
+
+        if st.button("🚀 Generate Replicator Prompt", type="primary"):
             try:
-                with st.spinner("🕷️ Crawling website content..."):
-                    # 1. Scrape the website
-                    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/91.0.4472.124 Safari/537.36'}
-                    page = requests.get(target_url, headers=headers, timeout=10)
-                    soup = BeautifulSoup(page.content, 'html.parser')
+                model = genai.GenerativeModel(model_name)
+                with st.spinner("Synthesizing Code Strategy..."):
                     
-                    # Get text (limit to 10,000 chars)
-                    site_text = soup.get_text(separator=' ', strip=True)[:10000]
+                    final_prompt = f"""
+                    Act as a Senior Frontend Architect.
+                    TASK: Create a system prompt for an AI Coding Agent (Cursor/v0) to REPLICATE this website.
                     
-                with st.spinner("🧠 Analyzing design & structure..."):
-                    model = genai.GenerativeModel(user_model_name)
+                    ### 1. SOURCE DATA
+                    * **Title:** {st.session_state.site_title}
+                    * **Content Summary:** "{st.session_state.scraped_text[:2000]}..."
                     
-                    # This block is where you had the error. 
-                    # I have ensured the opening (f""") and closing (""") quotes are correct.
-                    analysis_prompt = f"""
-                    Act as a Senior UI/UX Designer and Frontend Developer.
-                    I have scraped the text content of a website below.
+                    ### 2. USER VISION
+                    * **Role:** {role}
+                    * **Vibe:** {vibe}
+                    * **Tech Stack:** {stack}
+                    * **REQUIRED ANIMATIONS (Crucial):** {magic}
                     
-                    YOUR TASK:
-                    Write a comprehensive "System Prompt" that I can give to an AI coding agent (like Cursor, v0, or ChatGPT) to REPLICATE this website.
+                    ### 3. INSTRUCTIONS
+                    Write a prompt that instructs the AI to:
+                    1. Use the defined Tech Stack ({stack}).
+                    2. If the user described 3D/Physics in the 'Animations' section, explicitly recommend libraries like Three.js or Matter.js.
+                    3. Structure the Scraped Content into a beautiful layout matching the '{vibe}'.
                     
-                    The prompt you write must describe:
-                    1. The Vibe/Aesthetics (guess colors/fonts based on content tone).
-                    2. The Structure (Hero, Features, Footer, etc.).
-                    3. The Content Strategy.
-                    4. The exact technical instruction to build it (HTML/Tailwind/React).
-                    
-                    SCRAPED WEBSITE CONTENT:
-                    "{site_text}"
-                    
-                    OUTPUT:
-                    Provide ONLY the prompt I should use, inside a code block.
+                    OUTPUT: Provide ONLY the prompt in a code block.
                     """
                     
-                    response = model.generate_content(analysis_prompt)
-                    
-                    st.success("Analysis Complete! Copy the prompt below to build your clone.")
-                    st.subheader("🧬 The Replication Prompt:")
+                    response = model.generate_content(final_prompt)
+                    st.subheader("🧬 Your Master Prompt:")
                     st.code(response.text, language='markdown')
-                    
             except Exception as e:
                 st.error(f"Error: {e}")
