@@ -3,6 +3,7 @@ import google.generativeai as genai
 import requests
 from bs4 import BeautifulSoup
 import json
+import re  # <--- NEW: For cleaning messy AI output
 
 # --- PAGE CONFIGURATION ---
 st.set_page_config(
@@ -71,9 +72,9 @@ tab1, tab2 = st.tabs(["✨ Prompt Enhancer (Interactive)", "🕷️ Website Repl
 with tab1:
     st.header("✨ The Active Reasoning Engine")
     
-    # Session State for Discovery Mode
+    # Session State
     if 'enhancer_step' not in st.session_state:
-        st.session_state.enhancer_step = "input" # input -> analysis -> final
+        st.session_state.enhancer_step = "input"
     if 'draft_result' not in st.session_state:
         st.session_state.draft_result = ""
     if 'discovery_questions' not in st.session_state:
@@ -97,7 +98,6 @@ with tab1:
                 ]
             )
             
-            # Sub-options for Vibe Coder
             vibe_type = "Genesis"
             if mode == "⚡ Vibe Coder (Bolt/Antigravity)":
                 vibe_type = st.radio("Stage?", ["Genesis (Start)", "Refiner (Polish)", "Logic Fixer (Bugs)"])
@@ -122,25 +122,36 @@ with tab1:
                         "draft": "The rewritten draft prompt...",
                         "questions": ["Question 1?", "Question 2?", "Question 3?"]
                     }}
+                    
+                    IMPORTANT: Output valid JSON only. Do not add markdown formatting like ```json.
                     """
                     
-                    # Force JSON response logic
-                    response = generate_with_fallback(model_name, analysis_prompt + "\nReturn Valid JSON only.")
+                    response = generate_with_fallback(model_name, analysis_prompt)
                     
                     if response:
                         try:
-                            # Parse the JSON
-                            cleaned_text = response.text.replace("```json", "").replace("```", "")
-                            data = json.loads(cleaned_text)
+                            # --- ROBUST CLEANING LOGIC (THE FIX) ---
+                            # This finds the JSON object {...} even if the AI adds text around it
+                            text = response.text
+                            match = re.search(r'\{.*\}', text, re.DOTALL)
                             
-                            st.session_state.draft_result = data['draft']
-                            st.session_state.discovery_questions = data['questions']
-                            st.session_state.enhancer_step = "analysis" # Move to next step
-                            st.rerun() # Refresh page to show new UI
-                        except:
-                            st.error("AI Analysis failed to format correctly. Try again.")
+                            if match:
+                                json_str = match.group()
+                                data = json.loads(json_str)
+                                
+                                st.session_state.draft_result = data.get('draft', "Error parsing draft.")
+                                st.session_state.discovery_questions = data.get('questions', ["What details are missing?", "Who is the audience?", "What is the goal?"])
+                                st.session_state.enhancer_step = "analysis"
+                                st.rerun()
+                            else:
+                                st.error("AI output was not valid JSON. Please try again.")
+                                st.code(text) # Show raw text for debugging
+                        except Exception as e:
+                            st.error(f"Parsing Error: {e}")
+                            st.write("Raw AI Output:")
+                            st.code(response.text)
 
-    # STEP 2: DISCOVERY & REFINEMENT
+    # STEP 2: DISCOVERY
     elif st.session_state.enhancer_step == "analysis":
         st.success("✅ Analysis Complete! I found some gaps.")
         
@@ -159,9 +170,14 @@ with tab1:
             st.info("The AI suggests answering these to reach 'God Mode':")
             
             with st.form("discovery_form"):
-                q1 = st.text_input(f"1. {st.session_state.discovery_questions[0]}")
-                q2 = st.text_input(f"2. {st.session_state.discovery_questions[1]}")
-                q3 = st.text_input(f"3. {st.session_state.discovery_questions[2]}")
+                # Safety check in case questions list is empty
+                q_list = st.session_state.discovery_questions
+                while len(q_list) < 3:
+                    q_list.append("Any extra details?")
+                
+                q1 = st.text_input(f"1. {q_list[0]}")
+                q2 = st.text_input(f"2. {q_list[1]}")
+                q3 = st.text_input(f"3. {q_list[2]}")
                 
                 submitted = st.form_submit_button("✨ Update & Finalize")
                 
@@ -174,9 +190,9 @@ with tab1:
                         {st.session_state.draft_result}
                         
                         USER ANSWERS TO CLARIFYING QUESTIONS:
-                        1. {q1}
-                        2. {q2}
-                        3. {q3}
+                        1. Question: {q_list[0]} -> Answer: {q1}
+                        2. Question: {q_list[1]} -> Answer: {q2}
+                        3. Question: {q_list[2]} -> Answer: {q3}
                         
                         TASK: Merge the original draft and the new answers into a FINAL MASTER PROMPT.
                         If this is code, include '### FEW-SHOT TRAINING' examples.
@@ -209,7 +225,7 @@ with tab2:
     if 'site_title' not in st.session_state:
         st.session_state.site_title = ""
 
-    url = st.text_input("Target Website URL:", placeholder="https://example.com")
+    url = st.text_input("Target Website URL:", placeholder="[https://example.com](https://example.com)")
     
     if st.button("🕷️ Scan Website"):
         if not url:
