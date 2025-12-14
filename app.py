@@ -2,6 +2,7 @@ import streamlit as st
 import google.generativeai as genai
 import requests
 from bs4 import BeautifulSoup
+import json
 
 # --- PAGE CONFIGURATION ---
 st.set_page_config(
@@ -62,146 +63,143 @@ if not api_key:
 genai.configure(api_key=api_key)
 
 # --- TABS ---
-tab1, tab2 = st.tabs(["✨ Prompt Enhancer (Writer)", "🕷️ Website Replicator (Builder)"])
+tab1, tab2 = st.tabs(["✨ Prompt Enhancer (Interactive)", "🕷️ Website Replicator (Builder)"])
 
 # ==========================================
-# TAB 1: THE PROMPT ENHANCER (Updated)
+# TAB 1: THE INTERACTIVE PROMPT ENHANCER
 # ==========================================
 with tab1:
-    st.header("✨ Turn Lazy Ideas into Gold")
+    st.header("✨ The Active Reasoning Engine")
     
-    col1, col2 = st.columns([1, 2])
-    with col1:
-        # THE NEW "AUTO-DETECT" IS THE DEFAULT
-        mode = st.selectbox(
-            "Choose Strategy:",
-            [
-                "✨ Auto-Detect (AI Decides Best Fit)", 
-                "⚡ Vibe Coder (Bolt/Antigravity)", 
-                "CO-STAR (General Writing)", 
-                "Chain of Thought (Logic/Math)", 
-                "Senior Coder (Python/JS)",
-                "Email Polisher (Professional)",
-                "Midjourney/Dal-E (Image Gen)",
-                "S.M.A.R.T. (Business Goals)", # NEW
-                "The 5 Ws (News/Reporting)"    # NEW
-            ]
-        )
-        
-        # LOGIC FOR MANUAL MODES
-        vibe_type = "Genesis (New Project)" 
-        if mode == "⚡ Vibe Coder (Bolt/Antigravity)":
-            vibe_type = st.radio("Stage?", ["Genesis (Start)", "Refiner (Polish)", "Logic Fixer (Bugs)"])
-        
-        agent_name = "Expert"
-        if mode == "Custom Persona":
-            agent_name = st.text_input("Who should the AI act as?", placeholder="e.g. Steve Jobs")
+    # Session State for Discovery Mode
+    if 'enhancer_step' not in st.session_state:
+        st.session_state.enhancer_step = "input" # input -> analysis -> final
+    if 'draft_result' not in st.session_state:
+        st.session_state.draft_result = ""
+    if 'discovery_questions' not in st.session_state:
+        st.session_state.discovery_questions = []
 
-    raw_prompt = st.text_area("Your Request:", height=200, placeholder="e.g., build a dashboard, OR write a angry email, OR solve a riddle...")
+    # STEP 1: INPUT
+    if st.session_state.enhancer_step == "input":
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            mode = st.selectbox(
+                "Choose Strategy:",
+                [
+                    "✨ Auto-Detect (AI Decides)", 
+                    "⚡ Vibe Coder (Bolt/Antigravity)", 
+                    "CO-STAR (General Writing)", 
+                    "Chain of Thought (Logic)", 
+                    "Senior Coder (Python/JS)",
+                    "Email Polisher",
+                    "S.M.A.R.T. (Business)",
+                    "The 5 Ws (Reporting)"
+                ]
+            )
+            
+            # Sub-options for Vibe Coder
+            vibe_type = "Genesis"
+            if mode == "⚡ Vibe Coder (Bolt/Antigravity)":
+                vibe_type = st.radio("Stage?", ["Genesis (Start)", "Refiner (Polish)", "Logic Fixer (Bugs)"])
 
-    if st.button("✨ Enhance Prompt", type="primary"):
-        if not raw_prompt:
-            st.warning("Type something first!")
-        else:
-            with st.spinner("🧠 Analyzing complexity & choosing framework..."):
-                
-                # --- 1. AUTO-DETECT INTELLIGENCE LAYER ---
-                target_mode = mode # Default to what user picked
-                
-                if mode == "✨ Auto-Detect (AI Decides Best Fit)":
-                    # We ask the AI to categorize the prompt first
-                    classifier_prompt = f"""
+        raw_prompt = st.text_area("Your Request:", height=200, placeholder="e.g., build a crypto dashboard...")
+
+        if st.button("🚀 Analyze & Enhance", type="primary"):
+            if not raw_prompt:
+                st.warning("Type something first!")
+            else:
+                with st.spinner("🧠 Analyzing gaps in your request..."):
+                    
+                    # 1. ANALYZE & GENERATE QUESTIONS
+                    analysis_prompt = f"""
                     Analyze this user request: "{raw_prompt}"
                     
-                    Classify it into ONE of these categories based on the user's intent:
-                    - CODE_GENESIS (If building a new app/website)
-                    - CODE_FIX (If asking to fix a bug)
-                    - WRITING (If writing an article, blog, or text)
-                    - LOGIC (If a math problem, riddle, or complex reasoning)
-                    - EMAIL (If sending a message/reply)
-                    - IMAGE (If describing a picture)
-                    - PLAN (If setting goals or business strategy)
-
-                    OUTPUT ONLY THE CATEGORY NAME.
+                    TASK 1: Rewrite it into a 'Draft Prompt' using the best framework (CO-STAR or Technical Spec).
+                    TASK 2: Identify 3 MISSING pieces of information that would make this prompt perfect.
+                    
+                    OUTPUT FORMAT (JSON):
+                    {{
+                        "draft": "The rewritten draft prompt...",
+                        "questions": ["Question 1?", "Question 2?", "Question 3?"]
+                    }}
                     """
-                    classification = generate_with_fallback(model_name, classifier_prompt)
                     
-                    # Map the AI's classification to our Frameworks
-                    detected_category = classification.text.strip().upper() if classification else "WRITING"
+                    # Force JSON response logic
+                    response = generate_with_fallback(model_name, analysis_prompt + "\nReturn Valid JSON only.")
                     
-                    if "CODE_GENESIS" in detected_category:
-                        target_mode = "⚡ Vibe Coder (Bolt/Antigravity)"
-                        vibe_type = "Genesis (New Project)"
-                        st.info("🤖 AI Detected: New App Build -> Using **Vibe Coder (Genesis)**")
-                    elif "CODE_FIX" in detected_category:
-                        target_mode = "⚡ Vibe Coder (Bolt/Antigravity)"
-                        vibe_type = "Logic Fixer (Bugs)"
-                        st.info("🤖 AI Detected: Bug Fix -> Using **Vibe Coder (Fixer)**")
-                    elif "LOGIC" in detected_category:
-                        target_mode = "Chain of Thought (Logic/Math)"
-                        st.info("🤖 AI Detected: Logic Puzzle -> Using **Chain of Thought**")
-                    elif "EMAIL" in detected_category:
-                        target_mode = "Email Polisher (Professional)"
-                        st.info("🤖 AI Detected: Email -> Using **Email Polisher**")
-                    elif "IMAGE" in detected_category:
-                        target_mode = "Midjourney/Dal-E (Image Gen)"
-                        st.info("🤖 AI Detected: Image Prompt -> Using **Midjourney Mode**")
-                    elif "PLAN" in detected_category:
-                        target_mode = "S.M.A.R.T. (Business Goals)"
-                        st.info("🤖 AI Detected: Planning -> Using **S.M.A.R.T. Framework**")
-                    else:
-                        target_mode = "CO-STAR (General Writing)"
-                        st.info("🤖 AI Detected: General Text -> Using **CO-STAR**")
+                    if response:
+                        try:
+                            # Parse the JSON
+                            cleaned_text = response.text.replace("```json", "").replace("```", "")
+                            data = json.loads(cleaned_text)
+                            
+                            st.session_state.draft_result = data['draft']
+                            st.session_state.discovery_questions = data['questions']
+                            st.session_state.enhancer_step = "analysis" # Move to next step
+                            st.rerun() # Refresh page to show new UI
+                        except:
+                            st.error("AI Analysis failed to format correctly. Try again.")
 
-                # --- 2. GENERATE SYSTEM PROMPT BASED ON (DETECTED) MODE ---
-                system_prompt = ""
+    # STEP 2: DISCOVERY & REFINEMENT
+    elif st.session_state.enhancer_step == "analysis":
+        st.success("✅ Analysis Complete! I found some gaps.")
+        
+        col_a, col_b = st.columns([1, 1])
+        
+        with col_a:
+            st.subheader("📄 Draft V1 (Good)")
+            st.code(st.session_state.draft_result, language="markdown")
+            
+            if st.button("🔙 Start Over"):
+                st.session_state.enhancer_step = "input"
+                st.rerun()
+
+        with col_b:
+            st.subheader("🕵️ Refinement (Make it Perfect)")
+            st.info("The AI suggests answering these to reach 'God Mode':")
+            
+            with st.form("discovery_form"):
+                q1 = st.text_input(f"1. {st.session_state.discovery_questions[0]}")
+                q2 = st.text_input(f"2. {st.session_state.discovery_questions[1]}")
+                q3 = st.text_input(f"3. {st.session_state.discovery_questions[2]}")
                 
-                # VIBE CODER LOGIC
-                if target_mode == "⚡ Vibe Coder (Bolt/Antigravity)":
-                    if "Genesis" in vibe_type:
-                        system_prompt = f"""
-                        Act as an Expert Prompt Engineer for AI Agents. Rewrite into a 'Genesis Prompt' using CO-STAR.
-                        CRITICAL: Append a '### FEW-SHOT TRAINING' section with 'Bad Output' vs 'Good Output' (Next.js/Tailwind).
-                        INPUT: "{raw_prompt}"
-                        """
-                    elif "Refiner" in vibe_type:
-                        system_prompt = f"""
-                        Act as a UI/UX Director. Rewrite into a 'Refiner Prompt'.
-                        CRITICAL: Append a '### FEW-SHOT TRAINING' section (e.g. 'Make it pop' -> 'shadow-xl').
-                        INPUT: "{raw_prompt}"
-                        """
-                    elif "Fixer" in vibe_type or "Logic" in vibe_type:
-                        system_prompt = f"""
-                        Act as a Senior Backend Engineer. Rewrite into a 'Logic Fixer Prompt'.
-                        CRITICAL: Append a '### FEW-SHOT TRAINING' section about Error Handling.
-                        INPUT: "{raw_prompt}"
-                        """
-
-                # STANDARD LOGIC
-                elif target_mode == "CO-STAR (General Writing)":
-                    system_prompt = f"Act as an Expert Writer. Rewrite using CO-STAR (Context, Objective, Style, Tone, Audience, Response). INPUT: '{raw_prompt}'"
-                elif target_mode == "Chain of Thought (Logic/Math)":
-                    system_prompt = f"Rewrite this prompt to force the AI to think step-by-step. INPUT: '{raw_prompt}'"
-                elif target_mode == "Senior Coder (Python/JS)":
-                    system_prompt = f"Act as a Senior Architect. Rewrite into a technical spec. INPUT: '{raw_prompt}'"
-                elif target_mode == "Email Polisher (Professional)":
-                    system_prompt = f"Act as a Comms Director. Rewrite into a professional email. INPUT: '{raw_prompt}'"
-                elif target_mode == "Midjourney/Dal-E (Image Gen)":
-                    system_prompt = f"Act as a Digital Artist. Rewrite into a detailed image generation prompt (Lighting, Camera, Style). INPUT: '{raw_prompt}'"
-                elif target_mode == "S.M.A.R.T. (Business Goals)":
-                    system_prompt = f"Rewrite this goal using the S.M.A.R.T framework (Specific, Measurable, Achievable, Relevant, Time-bound). INPUT: '{raw_prompt}'"
-                elif target_mode == "The 5 Ws (News/Reporting)":
-                    system_prompt = f"Rewrite this request to ensure it answers: Who, What, Where, When, and Why. INPUT: '{raw_prompt}'"
-
-                # --- 3. EXECUTE ---
-                response = generate_with_fallback(model_name, system_prompt)
+                submitted = st.form_submit_button("✨ Update & Finalize")
                 
-                if response:
-                    st.subheader(f"🚀 Result ({target_mode}):")
-                    st.code(response.text)
+                if submitted:
+                    with st.spinner("Synthesizing your answers..."):
+                        final_prompt_request = f"""
+                        The user has refined the previous draft.
+                        
+                        ORIGINAL DRAFT:
+                        {st.session_state.draft_result}
+                        
+                        USER ANSWERS TO CLARIFYING QUESTIONS:
+                        1. {q1}
+                        2. {q2}
+                        3. {q3}
+                        
+                        TASK: Merge the original draft and the new answers into a FINAL MASTER PROMPT.
+                        If this is code, include '### FEW-SHOT TRAINING' examples.
+                        """
+                        
+                        final_resp = generate_with_fallback(model_name, final_prompt_request)
+                        if final_resp:
+                            st.session_state.draft_result = final_resp.text
+                            st.session_state.enhancer_step = "final"
+                            st.rerun()
+
+    # STEP 3: FINAL RESULT
+    elif st.session_state.enhancer_step == "final":
+        st.balloons()
+        st.subheader("🚀 God-Mode Prompt (Final)")
+        st.code(st.session_state.draft_result, language="markdown")
+        
+        if st.button("🔄 Create Another"):
+            st.session_state.enhancer_step = "input"
+            st.rerun()
 
 # ==========================================
-# TAB 2: THE WEBSITE REPLICATOR (V3)
+# TAB 2: THE WEBSITE REPLICATOR (Same as before)
 # ==========================================
 with tab2:
     st.header("🕷️ Clone a Website's Soul")
