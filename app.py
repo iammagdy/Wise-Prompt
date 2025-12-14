@@ -33,72 +33,126 @@ def generate_with_fallback(user_model_name, prompt):
             st.error(f"❌ Error: {e}")
             return None
 
-# --- HELPER: RECURSIVE CRAWLER ---
-def recursive_crawl(start_url, max_pages=3):
+# --- HELPER: ASSET HUNTER ---
+def extract_assets(soup, url):
     """
-    Crawls the homepage and up to 'max_pages' internal links.
-    Returns a combined text summary of the site.
+    Finds Fonts, Icons, and Images to help the Chat AI answer questions about design.
     """
+    assets = {
+        "fonts": [],
+        "icons": [],
+        "images": []
+    }
+    # 1. Fonts
+    for link in soup.find_all('link', href=True):
+        href = link['href']
+        if 'fonts.googleapis.com' in href or href.endswith('.woff') or href.endswith('.woff2'):
+            assets['fonts'].append(urljoin(url, href))
+    # 2. Icons
+    for link in soup.find_all('link', rel=True):
+        if 'icon' in link['rel']:
+            assets['icons'].append(urljoin(url, link.get('href', '')))
+    # 3. Images (Logos/SVGs)
+    for img in soup.find_all('img', src=True):
+        src = img['src']
+        full_src = urljoin(url, src)
+        if 'logo' in src.lower() or src.endswith('.svg'):
+            assets['icons'].append(full_src)
+        else:
+            assets['images'].append(full_src)
+    return assets
+
+# --- HELPER: RECURSIVE CRAWLER V3 (With Counters) ---
+def recursive_crawl(start_url, max_pages=5):
     visited = set()
     queue = [start_url]
     combined_text = ""
-    page_summaries = []
+    site_structure = {} 
+    all_assets = {"fonts": set(), "icons": set(), "images": set()}
+    
+    # NEW: Global Counters
+    global_stats = {
+        "pages": 0,
+        "buttons": 0,
+        "links": 0,
+        "images": 0,
+        "inputs": 0,
+        "words": 0
+    }
     
     headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/91.0.4472.124 Safari/537.36'}
     base_domain = urlparse(start_url).netloc
-
-    status_placeholder = st.empty() # UI element for live updates
+    
+    # UI: Progress Bar
+    progress_bar = st.progress(0)
+    status_text = st.empty()
 
     count = 0
     while queue and count < max_pages:
+        # Update Progress
+        progress = int((count / max_pages) * 100)
+        progress_bar.progress(progress)
+        
         url = queue.pop(0)
-        if url in visited:
-            continue
+        if url in visited: continue
         
         try:
-            status_placeholder.info(f"🕷️ Crawling: {url}...")
+            status_text.markdown(f"**🕷️ Scanning Page {count+1}/{max_pages}:** `{url}`")
             response = requests.get(url, headers=headers, timeout=5)
-            if response.status_code != 200:
-                continue
+            if response.status_code != 200: continue
                 
             soup = BeautifulSoup(response.content, 'html.parser')
             
-            # Extract Text (Cleaned)
-            text = soup.get_text(separator=' ', strip=True)[:4000] # Limit per page to save tokens
+            # --- 1. COUNT ELEMENTS (The New Feature) ---
+            global_stats["buttons"] += len(soup.find_all('button'))
+            global_stats["links"] += len(soup.find_all('a'))
+            global_stats["images"] += len(soup.find_all('img'))
+            global_stats["inputs"] += len(soup.find_all('input'))
+            text_content = soup.get_text(separator=' ', strip=True)
+            global_stats["words"] += len(text_content.split())
+            global_stats["pages"] += 1
+            
+            # --- 2. DATA EXTRACTION ---
+            scripts = [s.get('src') for s in soup.find_all('script') if s.get('src')]
             title = soup.title.string if soup.title else "No Title"
             
-            combined_text += f"\n\n--- PAGE START: {title} ({url}) ---\n{text}\n--- PAGE END ---\n"
-            page_summaries.append({"url": url, "title": title})
+            # --- 3. SMART MAP ---
+            site_structure[url] = {"title": title, "scripts": scripts[:3]}
+            
+            # --- 4. ASSETS ---
+            page_assets = extract_assets(soup, url)
+            all_assets['fonts'].update(page_assets['fonts'])
+            all_assets['icons'].update(page_assets['icons'])
+            
+            combined_text += f"\n\n--- PAGE: {title} ({url}) ---\nDETECTED SCRIPTS: {scripts[:5]}\nCONTENT: {text_content[:4000]}"
             
             visited.add(url)
             count += 1
             
-            # Find internal links
+            # --- 5. QUEUE ---
             for link in soup.find_all('a', href=True):
                 href = link['href']
                 full_url = urljoin(url, href)
-                
-                # Only follow internal links
-                if urlparse(full_url).netloc == base_domain and full_url not in visited:
-                    if full_url not in queue:
-                        queue.append(full_url)
+                if urlparse(full_url).netloc == base_domain and full_url not in visited and full_url not in queue:
+                    queue.append(full_url)
             
-            time.sleep(0.5) # Be polite to the server
+            time.sleep(0.3)
             
         except Exception as e:
             st.warning(f"Skipped {url}: {e}")
             
-    status_placeholder.success(f"✅ Deep Scan Complete! Crawled {count} pages.")
-    return combined_text, page_summaries
+    progress_bar.progress(100)
+    status_text.success(f"✅ Mission Complete! Scanned {count} pages.")
+    
+    final_assets = {k: list(v) for k, v in all_assets.items()}
+    return combined_text, site_structure, final_assets, global_stats
 
 # --- SIDEBAR ---
 with st.sidebar:
     st.header("⚙️ Engine Room")
     api_key = st.text_input("🔑 Paste Gemini API Key:", type="password")
-    
     st.divider()
     model_name = st.text_input("Model Name:", value="gemini-pro") 
-    st.caption("Auto-switches if 404 error occurs.")
     
     if st.button("🐞 Check My Available Models"):
         if not api_key:
@@ -115,257 +169,127 @@ with st.sidebar:
 
 # --- MAIN APP ---
 st.title("⚡ God-Mode AI Suite")
-st.markdown("The ultimate toolkit for **Vibe Coding** and **Reverse Engineering**.")
+st.markdown("Tab 1: Create Prompts | Tab 2: **Full Site Scanner & Chat**")
 
 if not api_key:
-    st.warning("⬅️ Waiting for API Key in the sidebar...")
+    st.warning("⬅️ Waiting for API Key...")
     st.stop()
 
 genai.configure(api_key=api_key)
 
-# --- TABS ---
-tab1, tab2 = st.tabs(["✨ Prompt Enhancer (Reasoning Engine)", "🕷️ Website Replicator (Deep Crawler)"])
+tab1, tab2 = st.tabs(["✨ Prompt Enhancer", "🕷️ Crawl & Chat (Superpower)"])
 
 # ==========================================
-# TAB 1: THE INTERACTIVE PROMPT ENHANCER
+# TAB 1: PROMPT ENHANCER (Simplified)
 # ==========================================
 with tab1:
     st.header("✨ The Active Reasoning Engine")
-    
-    # Session State
-    if 'enhancer_step' not in st.session_state:
-        st.session_state.enhancer_step = "input"
-    if 'draft_result' not in st.session_state:
-        st.session_state.draft_result = ""
-    if 'discovery_questions' not in st.session_state:
-        st.session_state.discovery_questions = []
-
-    # STEP 1: INPUT
-    if st.session_state.enhancer_step == "input":
-        col1, col2 = st.columns([1, 2])
-        with col1:
-            mode = st.selectbox(
-                "Choose Strategy:",
-                [
-                    "✨ Auto-Detect (AI Decides)", 
-                    "⚡ Vibe Coder (Bolt/Antigravity)", 
-                    "CO-STAR (General Writing)", 
-                    "Chain of Thought (Logic)", 
-                    "Senior Coder (Python/JS)",
-                    "Email Polisher",
-                    "S.M.A.R.T. (Business)",
-                    "The 5 Ws (Reporting)"
-                ]
-            )
-            
-            # Brief Explanations
-            descriptions = {
-                "✨ Auto-Detect (AI Decides)": "🤖 I analyze your text and pick the perfect framework automatically.",
-                "⚡ Vibe Coder (Bolt/Antigravity)": "💻 For AI Agents (Bolt/Replit). Adds 'Few-Shot Examples' to prevent bad code.",
-                "CO-STAR (General Writing)": "📝 For Blogs/Emails. Uses Context, Objective, Style, Tone, Audience, Response.",
-                "Chain of Thought (Logic)": "🧠 For Math/Logic. Forces step-by-step thinking.",
-            }
-            if mode in descriptions:
-                st.info(descriptions[mode])
-
-        raw_prompt = st.text_area("Your Request:", height=200, placeholder="e.g., build a crypto dashboard...")
-
-        if st.button("🚀 Analyze & Enhance", type="primary"):
-            if not raw_prompt:
-                st.warning("Type something first!")
-            else:
-                with st.spinner("🧠 Analyzing gaps in your request..."):
-                    
-                    # Logic to set target mode based on Auto-Detect
-                    target_mode = mode
-                    if mode == "✨ Auto-Detect (AI Decides)":
-                         classifier_prompt = f"Classify intent: '{raw_prompt}'. Return ONE word: CODE, WRITING, LOGIC, EMAIL."
-                         cls = generate_with_fallback(model_name, classifier_prompt)
-                         cat = cls.text.strip().upper() if cls else "WRITING"
-                         target_mode = "⚡ Vibe Coder (Bolt/Antigravity)" if "CODE" in cat else "CO-STAR (General Writing)"
-
-                    analysis_prompt = f"""
-                    Analyze this user request: "{raw_prompt}"
-                    Target Framework: {target_mode}
-                    
-                    TASK 1: Rewrite it into a 'Draft Prompt' using the target framework.
-                    TASK 2: Identify 3 MISSING pieces of information.
-                    
-                    OUTPUT FORMAT (JSON):
-                    {{
-                        "draft": "The rewritten draft prompt...",
-                        "questions": ["Question 1?", "Question 2?", "Question 3?"]
-                    }}
-                    """
-                    
-                    response = generate_with_fallback(model_name, analysis_prompt)
-                    
-                    if response:
-                        try:
-                            text = response.text
-                            match = re.search(r'\{.*\}', text, re.DOTALL)
-                            if match:
-                                data = json.loads(match.group())
-                                st.session_state.draft_result = data.get('draft', "")
-                                st.session_state.discovery_questions = data.get('questions', [])
-                                st.session_state.enhancer_step = "analysis"
-                                st.rerun()
-                            else:
-                                st.error("AI output invalid.")
-                        except Exception as e:
-                            st.error(f"Error: {e}")
-
-    # STEP 2: DISCOVERY
-    elif st.session_state.enhancer_step == "analysis":
-        st.success("✅ Analysis Complete! I found some gaps.")
-        
-        col_a, col_b = st.columns([1, 1])
-        with col_a:
-            st.subheader("📄 Draft V1")
-            st.code(st.session_state.draft_result, language="markdown")
-            if st.button("🔙 Start Over"):
-                st.session_state.enhancer_step = "input"
-                st.rerun()
-
-        with col_b:
-            st.subheader("🕵️ Refinement")
-            st.info("The AI suggests answering these:")
-            with st.form("discovery_form"):
-                q_list = st.session_state.discovery_questions
-                while len(q_list) < 3: q_list.append("Any extra details?")
-                
-                q1 = st.text_input(f"1. {q_list[0]}")
-                q2 = st.text_input(f"2. {q_list[1]}")
-                q3 = st.text_input(f"3. {q_list[2]}")
-                
-                if st.form_submit_button("✨ Update & Finalize"):
-                    with st.spinner("Synthesizing..."):
-                        final_prompt_request = f"""
-                        Merge into FINAL PROMPT.
-                        DRAFT: {st.session_state.draft_result}
-                        ANSWERS: 1.{q1}, 2.{q2}, 3.{q3}
-                        """
-                        final_resp = generate_with_fallback(model_name, final_prompt_request)
-                        if final_resp:
-                            st.session_state.draft_result = final_resp.text
-                            st.session_state.enhancer_step = "final"
-                            st.rerun()
-
-    # STEP 3: FINAL
-    elif st.session_state.enhancer_step == "final":
-        st.balloons()
-        st.subheader("🚀 God-Mode Prompt (Final)")
-        st.code(st.session_state.draft_result, language="markdown")
-        if st.button("🔄 Create Another"):
-            st.session_state.enhancer_step = "input"
-            st.rerun()
+    mode = st.selectbox("Strategy:", ["✨ Auto-Detect", "⚡ Vibe Coder", "CO-STAR", "Chain of Thought"])
+    raw_prompt = st.text_area("Your Request:", height=150)
+    if st.button("🚀 Enhance"):
+        with st.spinner("Enhancing..."):
+            res = generate_with_fallback(model_name, f"Enhance this prompt using {mode}: {raw_prompt}")
+            if res: st.code(res.text, language='markdown')
 
 # ==========================================
-# TAB 2: THE WEBSITE REPLICATOR (DEEP SCAN)
+# TAB 2: CRAWL & CHAT (THE SUPERPOWER)
 # ==========================================
 with tab2:
-    st.header("🕷️ Deep Website Scanner")
-    st.info("This tool recursively crawls the site to understand the FULL structure, not just the homepage.")
+    st.header("🕷️ Deep Scan & Chat")
     
-    if 'scraped_text' not in st.session_state:
-        st.session_state.scraped_text = ""
-    if 'site_map' not in st.session_state:
-        st.session_state.site_map = []
-    if 'site_title' not in st.session_state:
-        st.session_state.site_title = ""
+    # State
+    if 'messages' not in st.session_state: st.session_state.messages = []
+    if 'knowledge_base' not in st.session_state: st.session_state.knowledge_base = ""
+    if 'scanned_url' not in st.session_state: st.session_state.scanned_url = ""
+    if 'global_stats' not in st.session_state: st.session_state.global_stats = {}
 
-    url = st.text_input("Target Website URL:", placeholder="https://example.com")
+    # --- 1. CONFIGURATION ---
+    c1, c2 = st.columns([3, 1])
+    with c1:
+        url = st.text_input("Target URL:", placeholder="https://example.com")
+    with c2:
+        # NEW: CRAWL SCOPE DROPDOWN
+        crawl_scope = st.selectbox(
+            "Scan Scope:", 
+            ["Home Page Only (1 Page)", "Quick Scan (5 Pages)", "Deep Scan (20 Pages)", "Massive Scan (50 Pages)"]
+        )
+
+    # Convert Dropdown to Number
+    page_limit = 1
+    if "Quick" in crawl_scope: page_limit = 5
+    if "Deep" in crawl_scope: page_limit = 20
+    if "Massive" in crawl_scope: page_limit = 50
     
-    if st.button("🕷️ Start Deep Scan (Recursive)"):
+    if st.button("🕷️ Start Scan", type="primary"):
         if not url:
-            st.warning("Need a URL!")
+            st.warning("Need URL!")
         else:
-            with st.spinner("🕷️ Initializing Recursive Crawler..."):
-                full_text, pages = recursive_crawl(url, max_pages=3)
-                st.session_state.scraped_text = full_text
-                st.session_state.site_map = pages
-                st.session_state.site_title = pages[0]['title'] if pages else "Unknown"
-
-    if st.session_state.scraped_text:
-        st.divider()
-        st.success(f"✅ Scanned {len(st.session_state.site_map)} Pages Successfully")
-        
-        with st.expander("View Scraped Site Map"):
-            for p in st.session_state.site_map:
-                st.write(f"- **{p['title']}**: {p['url']}")
-
-        st.subheader("2️⃣ Director's Cut")
-        
-        c1, c2 = st.columns(2)
-        with c1:
-            brand_name = st.text_input("Brand Name:", value=st.session_state.site_title)
-        with c2:
-            role = st.text_input("Industry/Role:", placeholder="e.g. SaaS, Portfolio")
+            # RUN CRAWLER
+            full_text, structure, assets, stats = recursive_crawl(url, max_pages=page_limit)
             
-        c3, c4 = st.columns(2)
-        with c3:
-            vibe = st.text_input("Visual Vibe:", placeholder="Dark, Minimal")
-        with c4:
-            stack = st.selectbox("Tech Stack:", ["Next.js + Tailwind + Framer", "HTML + CSS + JS", "React + Three.js"])
+            # Save Data
+            st.session_state.scanned_url = url
+            st.session_state.global_stats = stats
+            st.session_state.knowledge_base = f"""
+            SOURCE URL: {url}
+            STATS: {json.dumps(stats)}
+            SITE MAP: {json.dumps(structure)}
+            ASSETS FOUND: {json.dumps(assets)}
+            RAW CONTENT & SCRIPTS:
+            {full_text}
+            """
+            
+            # Reset Chat
+            st.session_state.messages = [{"role": "assistant", "content": f"I have scanned **{stats['pages']} pages** on {url}. I found {stats['buttons']} buttons and {stats['images']} images. Ask me anything!"}]
+            st.rerun()
 
-        magic = st.text_area("✨ Describe Animation Magic:", placeholder="IMPORTANT: Describe 3D objects, scroll effects, or interactions.")
+    # --- 2. RESULTS DASHBOARD ---
+    if st.session_state.knowledge_base:
+        st.divider()
+        
+        # STATS ROW
+        stats = st.session_state.global_stats
+        if stats:
+            k1, k2, k3, k4 = st.columns(4)
+            k1.metric("Pages Scanned", stats.get('pages', 0))
+            k2.metric("Total Links", stats.get('links', 0))
+            k3.metric("Total Buttons", stats.get('buttons', 0))
+            k4.metric("Images Found", stats.get('images', 0))
 
-        if st.button("🚀 Generate Report & Prompt", type="primary"):
-            with st.spinner("Analyzing Deep Data..."):
-                
-                # --- DUAL OUTPUT PROMPT ---
-                analysis_request = f"""
-                Act as a Senior Technical Architect and Reverse Engineer.
-                
-                SOURCE DATA (From Recursive Crawl):
-                "{st.session_state.scraped_text[:15000]}..."
-                
-                USER CONTEXT:
-                Brand: {brand_name}, Role: {role}, Vibe: {vibe}, Stack: {stack}, Magic: {magic}
-                
-                TASK:
-                Generate TWO distinct outputs separated by the delimiter "|||SEPARATOR|||".
-                
-                ### OUTPUT 1: THE BLUEPRINT REPORT (Markdown)
-                A comprehensive analysis for a human developer to understand the site.
-                - **Executive Summary:** What is this site?
-                - **Site Map Analysis:** The structure based on the pages found.
-                - **Design System Extraction:** * Color Palette (Primary, Secondary, Background).
-                    * Typography (Headings, Body).
-                - **Tech Stack Inference:** What tools likely built this?
-                - **Asset Inventory:** List types of images/icons found.
-                
-                |||SEPARATOR|||
-                
-                ### OUTPUT 2: THE BUILDER PROMPT (System Instruction)
-                A "God-Mode" system prompt for an AI Agent (Cursor/v0) to BUILD this site.
-                - **Role:** Act as Senior Architect.
-                - **Design System:** Enforce the colors/fonts found in the report.
-                - **Architecture:** Define components (Hero, Nav, Footer) based on the scan.
-                - **Interactivity:** Explicitly implement the "{magic}" using Framer Motion/Three.js.
-                - **Few-Shot Training:** Include examples of "Bad Code" vs "Good Code" ({stack}).
-                
-                Output ONLY the two sections separated by the delimiter.
-                """
-                
-                response = generate_with_fallback(model_name, analysis_request)
-                
-                if response:
-                    try:
-                        parts = response.text.split("|||SEPARATOR|||")
-                        report = parts[0]
-                        builder_prompt = parts[1] if len(parts) > 1 else "Error generating prompt part."
-                        
-                        # DISPLAY DUAL TABS
-                        out_tab1, out_tab2 = st.tabs(["📄 The Blueprint (Report)", "💻 The Builder (Prompt)"])
-                        
-                        with out_tab1:
-                            st.markdown(report)
-                            st.download_button("Download Report", report, file_name="site_report.md")
-                        with out_tab2:
-                            st.info("Copy this block into Cursor, Bolt.new, or v0.dev")
-                            st.code(builder_prompt, language='markdown')
-                            
-                    except Exception as e:
-                        st.error("Error splitting output. Showing raw response.")
-                        st.write(response.text)
+        st.divider()
+        st.subheader(f"💬 Chatting with: {st.session_state.scanned_url}")
+        
+        # Chat History
+        for msg in st.session_state.messages:
+            with st.chat_message(msg["role"]):
+                st.markdown(msg["content"])
+
+        # Chat Input
+        if user_input := st.chat_input("Ask about tech stack, colors, or code..."):
+            st.session_state.messages.append({"role": "user", "content": user_input})
+            with st.chat_message("user"):
+                st.markdown(user_input)
+
+            # AI Reply
+            with st.chat_message("assistant"):
+                with st.spinner("Analyzing site data..."):
+                    chat_prompt = f"""
+                    You are a Senior Technical Architect.
+                    KNOWLEDGE BASE (Scraped Data):
+                    {st.session_state.knowledge_base[:30000]}
+                    
+                    USER QUESTION: "{user_input}"
+                    
+                    INSTRUCTIONS:
+                    1. Answer based ONLY on the scraped data.
+                    2. If asked for a prompt, write a 'Cursor/Bolt.new' system prompt.
+                    3. Be concise and technical.
+                    """
+                    response = generate_with_fallback(model_name, chat_prompt)
+                    if response:
+                        ai_reply = response.text
+                        st.markdown(ai_reply)
+                        st.session_state.messages.append({"role": "assistant", "content": ai_reply})
+        
+        with st.expander("📦 Download Raw Data"):
+            st.download_button("Download Full Scan JSON", st.session_state.knowledge_base, file_name="scan_data.json")
