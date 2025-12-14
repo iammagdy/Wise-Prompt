@@ -29,6 +29,7 @@ st.markdown("""
     h1, h2, h3 { font-family: 'Courier New', monospace; color: #E6EDF3; }
     .metric-container { background-color: #0D1117; border: 1px solid #30363D; padding: 10px; border-radius: 5px; }
     div[data-testid="stMarkdownContainer"] p { font-size: 1.1em; }
+    div.stAlert { background-color: #161B22; border: 1px solid #30363D; color: #E6EDF3; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -208,7 +209,7 @@ genai.configure(api_key=api_key)
 tab1, tab2, tab3 = st.tabs(["✨ PROMPT ENGINEER", "🕷️ DEEP CRAWLER", "👁️ VISION REPLICATOR"])
 
 # ==========================================
-# TAB 1: PROMPT ENHANCER (Full Features)
+# TAB 1: PROMPT ENHANCER (With Briefs)
 # ==========================================
 with tab1:
     st.header("✨ Active Reasoning Engine")
@@ -228,13 +229,29 @@ with tab1:
             "Custom Persona"
         ]
     )
+
+    # --- RESTORED: THE DYNAMIC BRIEF ---
+    descriptions = {
+        "✨ Auto-Detect (AI Decides)": "🤖 **Best for:** Unsure users. I analyze your request and pick the best framework automatically.",
+        "⚡ Vibe Coder (Bolt/Antigravity)": "💻 **Best for:** AI Agents (Bolt.new, Replit). Adds 'Few-Shot Examples' to prevent bad code.",
+        "CO-STAR (General Writing)": "📝 **Best for:** Blogs & Essays. Uses Context, Objective, Style, Tone, Audience, Response.",
+        "Chain of Thought (Logic)": "🧠 **Best for:** Math & Riddles. Forces step-by-step thinking to avoid logic errors.",
+        "Senior Coder (Python/JS)": "👨‍💻 **Best for:** Traditional coding. Writes technical specs and secure code architectures.",
+        "Email Polisher": "📧 **Best for:** Professionalism. Turns angry/messy notes into corporate-ready emails.",
+        "S.M.A.R.T. (Business)": "📊 **Best for:** Goals. Ensures Specific, Measurable, Achievable, Relevant, Time-bound outputs.",
+        "The 5 Ws (Reporting)": "📰 **Best for:** Journalism. Ensures Who, What, Where, When, Why are answered.",
+        "Custom Persona": "🎭 **Best for:** Roleplay. You define who the AI acts as (e.g., Steve Jobs)."
+    }
+    
+    if mode in descriptions:
+        st.info(descriptions[mode])
+    # ------------------------------------
     
     # 2. SUB-OPTIONS
     vibe_type = "Genesis (New Project)" 
     agent_name = "Expert"
 
     if mode == "⚡ Vibe Coder (Bolt/Antigravity)":
-        st.info("💡 Adds 'Few-Shot Examples' to teach the Agent standard coding practices.")
         vibe_type = st.radio("STAGE?", ["Genesis (Start New)", "Refiner (Polish UI)", "Logic Fixer (Debug)"], horizontal=True)
     
     elif mode == "Custom Persona":
