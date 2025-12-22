@@ -7,6 +7,7 @@ import json
 import re
 import time
 import os
+import concurrent.futures
 from datetime import datetime
 from urllib.parse import urljoin, urlparse
 
@@ -136,58 +137,87 @@ def recursive_crawl(start_url, max_pages=5):
     status_text = st.empty()
     count = 0
     
-    while queue and count < max_pages:
-        progress_bar.progress(min(int((count / max_pages) * 100), 99))
-        url = queue.pop(0)
-        if url in visited: continue
-        
-        try:
-            status_text.markdown(f"**🕷️ Scanning Page {count+1}/{max_pages}:** `{url}`")
-            response = requests.get(url, headers=headers, timeout=5)
-            if response.status_code != 200: continue
-            soup = BeautifulSoup(response.content, 'html.parser')
-            
-            global_stats["buttons"] += len(soup.find_all('button'))
-            global_stats["links"] += len(soup.find_all('a'))
-            global_stats["images"] += len(soup.find_all('img'))
-            global_stats["inputs"] += len(soup.find_all('input'))
-            text_content = soup.get_text(separator=' ', strip=True)
-            global_stats["words"] += len(text_content.split())
-            global_stats["pages"] += 1
-            
-            scripts = [s.get('src') for s in soup.find_all('script') if s.get('src')]
-            title = soup.title.string if soup.title else "No Title"
-            site_structure[url] = {"title": title, "scripts": scripts[:3]}
-            
-            def extract_assets_internal(soup, url):
-                assets = {"fonts": [], "icons": [], "images": []}
-                for link in soup.find_all('link', href=True):
-                    href = link['href']
-                    if 'fonts.googleapis.com' in href or href.endswith('.woff'): assets['fonts'].append(urljoin(url, href))
-                for link in soup.find_all('link', rel=True):
-                    if 'icon' in str(link.get('rel')): assets['icons'].append(urljoin(url, link.get('href', '')))
-                for img in soup.find_all('img', src=True):
-                    src = img['src']
-                    full_src = urljoin(url, src)
-                    if 'logo' in src.lower() or src.endswith('.svg'): assets['icons'].append(full_src)
-                    else: assets['images'].append(full_src)
-                return assets
+    # PERFORMANCE: Use a Session for connection pooling and ThreadPoolExecutor for parallel fetching
+    session = requests.Session()
+    session.headers.update(headers)
 
-            page_assets = extract_assets_internal(soup, url)
-            all_assets['fonts'].update(page_assets['fonts'])
-            all_assets['icons'].update(page_assets['icons'])
+    def fetch_url(url):
+        try:
+            time.sleep(0.3) # Politeness delay (per thread)
+            response = session.get(url, timeout=5)
+            if response.status_code == 200:
+                return url, response.content
+        except:
+            pass
+        return url, None
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+        while queue and count < max_pages:
+            progress_bar.progress(min(int((count / max_pages) * 100), 99))
             
-            combined_text += f"\n\n--- PAGE: {title} ({url}) ---\nDETECTED SCRIPTS: {scripts[:5]}\nCONTENT: {text_content[:4000]}"
-            visited.add(url)
-            count += 1
+            # Prepare batch
+            batch_urls = []
+            while len(batch_urls) < 5 and queue and (count + len(batch_urls)) < max_pages:
+                u = queue.pop(0)
+                if u not in visited:
+                    visited.add(u)
+                    batch_urls.append(u)
             
-            for link in soup.find_all('a', href=True):
-                href = link['href']
-                full_url = urljoin(url, href)
-                if urlparse(full_url).netloc == base_domain and full_url not in visited and full_url not in queue:
-                    queue.append(full_url)
-            time.sleep(0.3)
-        except: pass
+            if not batch_urls:
+                if not queue: break
+                continue
+
+            status_text.markdown(f"**🕷️ Scanning Batch (up to 5):** `{batch_urls[0]}...`")
+            
+            # Execute batch
+            futures = {executor.submit(fetch_url, u): u for u in batch_urls}
+            
+            for future in concurrent.futures.as_completed(futures):
+                url, content = future.result()
+                if not content: continue
+
+                try:
+                    soup = BeautifulSoup(content, 'html.parser')
+
+                    global_stats["buttons"] += len(soup.find_all('button'))
+                    global_stats["links"] += len(soup.find_all('a'))
+                    global_stats["images"] += len(soup.find_all('img'))
+                    global_stats["inputs"] += len(soup.find_all('input'))
+                    text_content = soup.get_text(separator=' ', strip=True)
+                    global_stats["words"] += len(text_content.split())
+                    global_stats["pages"] += 1
+
+                    scripts = [s.get('src') for s in soup.find_all('script') if s.get('src')]
+                    title = soup.title.string if soup.title else "No Title"
+                    site_structure[url] = {"title": title, "scripts": scripts[:3]}
+
+                    def extract_assets_internal(soup, url):
+                        assets = {"fonts": [], "icons": [], "images": []}
+                        for link in soup.find_all('link', href=True):
+                            href = link['href']
+                            if 'fonts.googleapis.com' in href or href.endswith('.woff'): assets['fonts'].append(urljoin(url, href))
+                        for link in soup.find_all('link', rel=True):
+                            if 'icon' in str(link.get('rel')): assets['icons'].append(urljoin(url, link.get('href', '')))
+                        for img in soup.find_all('img', src=True):
+                            src = img['src']
+                            full_src = urljoin(url, src)
+                            if 'logo' in src.lower() or src.endswith('.svg'): assets['icons'].append(full_src)
+                            else: assets['images'].append(full_src)
+                        return assets
+
+                    page_assets = extract_assets_internal(soup, url)
+                    all_assets['fonts'].update(page_assets['fonts'])
+                    all_assets['icons'].update(page_assets['icons'])
+
+                    combined_text += f"\n\n--- PAGE: {title} ({url}) ---\nDETECTED SCRIPTS: {scripts[:5]}\nCONTENT: {text_content[:4000]}"
+                    count += 1
+
+                    for link in soup.find_all('a', href=True):
+                        href = link['href']
+                        full_url = urljoin(url, href)
+                        if urlparse(full_url).netloc == base_domain and full_url not in visited and full_url not in queue:
+                            queue.append(full_url)
+                except: pass
             
     progress_bar.progress(100)
     status_text.success(f"✅ Mission Complete! Scanned {count} pages.")
