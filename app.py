@@ -197,7 +197,7 @@ def recursive_crawl(start_url, max_pages=5):
 # --- 4. SIDEBAR ---
 with st.sidebar:
     st.header("⚙️ SYSTEM CONTROL")
-    api_key = st.text_input("API KEY", type="password", key="sidebar_api_key")
+    api_key = st.text_input("API KEY", type="password", key="sidebar_api_key", placeholder="Enter your Google AI Key here...", help="Get your API key from [Google AI Studio](https://aistudio.google.com/app/apikey)")
     st.divider()
     
     model_options = [
