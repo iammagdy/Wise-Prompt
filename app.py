@@ -7,6 +7,7 @@ import json
 import re
 import time
 import os
+from collections import deque
 from datetime import datetime
 from urllib.parse import urljoin, urlparse
 
@@ -61,30 +62,40 @@ st.markdown("""
 # --- 2. PERSISTENCE LAYER ---
 HISTORY_FILE = "god_mode_history.json"
 
+
 def load_history_db():
-    if not os.path.exists(HISTORY_FILE): return {}
+    if not os.path.exists(HISTORY_FILE):
+        return {}
     try:
-        with open(HISTORY_FILE, "r") as f: return json.load(f)
-    except: return {}
+        with open(HISTORY_FILE, "r") as f:
+            return json.load(f)
+    except:
+        return {}
+
 
 def save_history_db(db):
-    with open(HISTORY_FILE, "w") as f: json.dump(db, f, indent=4)
+    with open(HISTORY_FILE, "w") as f:
+        json.dump(db, f, indent=4)
+
 
 def add_to_history(api_key, tool_used, input_data, output_data):
     db = load_history_db()
-    if api_key not in db: db[api_key] = []
+    if api_key not in db:
+        db[api_key] = []
     entry = {
         "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         "tool": tool_used,
-        "input": str(input_data)[:200] + "...", 
+        "input": str(input_data)[:200] + "...",
         "output": output_data
     }
     db[api_key].insert(0, entry)
     save_history_db(db)
 
+
 def get_user_history(api_key):
     db = load_history_db()
     return db.get(api_key, [])
+
 
 def clear_user_history(api_key):
     db = load_history_db()
@@ -94,17 +105,21 @@ def clear_user_history(api_key):
 
 # --- 3. HELPER FUNCTIONS ---
 
+
 def generate_with_fallback(user_model_name, prompt, image=None):
     try:
         model = genai.GenerativeModel(user_model_name)
-        if image: return model.generate_content([prompt, image])
+        if image:
+            return model.generate_content([prompt, image])
         return model.generate_content(prompt)
     except Exception as e:
         if "404" in str(e) or "not found" in str(e).lower():
-            st.warning(f"⚠️ Model '{user_model_name}' not found. Switching to backup 'gemini-pro'...")
+            st.warning(
+                f"⚠️ Model '{user_model_name}' not found. Switching to backup 'gemini-pro'...")
             try:
                 backup_model = genai.GenerativeModel("gemini-pro")
-                if image: return backup_model.generate_content([prompt, image])
+                if image:
+                    return backup_model.generate_content([prompt, image])
                 return backup_model.generate_content(prompt)
             except Exception as e2:
                 st.error(f"❌ Backup failed. Check API Key. Error: {e2}")
@@ -112,6 +127,7 @@ def generate_with_fallback(user_model_name, prompt, image=None):
         else:
             st.error(f"❌ Error: {e}")
             return None
+
 
 def render_output_console(content):
     st.markdown("---")
@@ -121,97 +137,117 @@ def render_output_console(content):
         st.code(content, language="markdown")
         st.success("✅ Ready to Copy.")
 
+
 def recursive_crawl(start_url, max_pages=5):
+    # Bolt: Optimization - Use deque for O(1) pops and requests.Session for connection reuse
     visited = set()
-    queue = [start_url]
-    combined_text = ""
-    site_structure = {} 
+    queue = deque([start_url])
+    combined_text_parts = []  # Bolt: Optimization - Use list for efficient string joining
+    site_structure = {}
     all_assets = {"fonts": set(), "icons": set(), "images": set()}
-    global_stats = {"pages": 0, "buttons": 0, "links": 0, "images": 0, "inputs": 0, "words": 0}
-    
+    global_stats = {"pages": 0, "buttons": 0,
+                    "links": 0, "images": 0, "inputs": 0, "words": 0}
+
     headers = {'User-Agent': 'Mozilla/5.0'}
     base_domain = urlparse(start_url).netloc
-    
+
     progress_bar = st.progress(0)
     status_text = st.empty()
     count = 0
-    
-    while queue and count < max_pages:
-        progress_bar.progress(min(int((count / max_pages) * 100), 99))
-        url = queue.pop(0)
-        if url in visited: continue
-        
-        try:
-            status_text.markdown(f"**🕷️ Scanning Page {count+1}/{max_pages}:** `{url}`")
-            response = requests.get(url, headers=headers, timeout=5)
-            if response.status_code != 200: continue
-            soup = BeautifulSoup(response.content, 'html.parser')
-            
-            global_stats["buttons"] += len(soup.find_all('button'))
-            global_stats["links"] += len(soup.find_all('a'))
-            global_stats["images"] += len(soup.find_all('img'))
-            global_stats["inputs"] += len(soup.find_all('input'))
-            text_content = soup.get_text(separator=' ', strip=True)
-            global_stats["words"] += len(text_content.split())
-            global_stats["pages"] += 1
-            
-            scripts = [s.get('src') for s in soup.find_all('script') if s.get('src')]
-            title = soup.title.string if soup.title else "No Title"
-            site_structure[url] = {"title": title, "scripts": scripts[:3]}
-            
-            def extract_assets_internal(soup, url):
-                assets = {"fonts": [], "icons": [], "images": []}
-                for link in soup.find_all('link', href=True):
-                    href = link['href']
-                    if 'fonts.googleapis.com' in href or href.endswith('.woff'): assets['fonts'].append(urljoin(url, href))
-                for link in soup.find_all('link', rel=True):
-                    if 'icon' in str(link.get('rel')): assets['icons'].append(urljoin(url, link.get('href', '')))
-                for img in soup.find_all('img', src=True):
-                    src = img['src']
-                    full_src = urljoin(url, src)
-                    if 'logo' in src.lower() or src.endswith('.svg'): assets['icons'].append(full_src)
-                    else: assets['images'].append(full_src)
-                return assets
 
-            page_assets = extract_assets_internal(soup, url)
-            all_assets['fonts'].update(page_assets['fonts'])
-            all_assets['icons'].update(page_assets['icons'])
-            
-            combined_text += f"\n\n--- PAGE: {title} ({url}) ---\nDETECTED SCRIPTS: {scripts[:5]}\nCONTENT: {text_content[:4000]}"
-            visited.add(url)
-            count += 1
-            
-            for link in soup.find_all('a', href=True):
-                href = link['href']
-                full_url = urljoin(url, href)
-                if urlparse(full_url).netloc == base_domain and full_url not in visited and full_url not in queue:
-                    queue.append(full_url)
-            time.sleep(0.3)
-        except: pass
-            
+    with requests.Session() as session:  # Bolt: Optimization - Reuse TCP connections
+        session.headers.update(headers)
+
+        while queue and count < max_pages:
+            progress_bar.progress(min(int((count / max_pages) * 100), 99))
+            url = queue.popleft()  # Bolt: Optimization - O(1) operation
+            if url in visited:
+                continue
+
+            try:
+                status_text.markdown(
+                    f"**🕷️ Scanning Page {count+1}/{max_pages}:** `{url}`")
+                response = session.get(url, timeout=5)
+                if response.status_code != 200:
+                    continue
+                soup = BeautifulSoup(response.content, 'html.parser')
+
+                global_stats["buttons"] += len(soup.find_all('button'))
+                global_stats["links"] += len(soup.find_all('a'))
+                global_stats["images"] += len(soup.find_all('img'))
+                global_stats["inputs"] += len(soup.find_all('input'))
+                text_content = soup.get_text(separator=' ', strip=True)
+                global_stats["words"] += len(text_content.split())
+                global_stats["pages"] += 1
+
+                scripts = [s.get('src')
+                           for s in soup.find_all('script') if s.get('src')]
+                title = soup.title.string if soup.title else "No Title"
+                site_structure[url] = {"title": title, "scripts": scripts[:3]}
+
+                def extract_assets_internal(soup, url):
+                    assets = {"fonts": [], "icons": [], "images": []}
+                    for link in soup.find_all('link', href=True):
+                        href = link['href']
+                        if 'fonts.googleapis.com' in href or href.endswith('.woff'):
+                            assets['fonts'].append(urljoin(url, href))
+                    for link in soup.find_all('link', rel=True):
+                        if 'icon' in str(link.get('rel')):
+                            assets['icons'].append(
+                                urljoin(url, link.get('href', '')))
+                    for img in soup.find_all('img', src=True):
+                        src = img['src']
+                        full_src = urljoin(url, src)
+                        if 'logo' in src.lower() or src.endswith('.svg'):
+                            assets['icons'].append(full_src)
+                        else:
+                            assets['images'].append(full_src)
+                    return assets
+
+                page_assets = extract_assets_internal(soup, url)
+                all_assets['fonts'].update(page_assets['fonts'])
+                all_assets['icons'].update(page_assets['icons'])
+
+                combined_text_parts.append(
+                    f"\n\n--- PAGE: {title} ({url}) ---\nDETECTED SCRIPTS: {scripts[:5]}\nCONTENT: {text_content[:4000]}")
+                visited.add(url)
+                count += 1
+
+                for link in soup.find_all('a', href=True):
+                    href = link['href']
+                    full_url = urljoin(url, href)
+                    if urlparse(full_url).netloc == base_domain and full_url not in visited and full_url not in queue:
+                        queue.append(full_url)
+                time.sleep(0.3)
+            except:
+                pass
+
     progress_bar.progress(100)
     status_text.success(f"✅ Mission Complete! Scanned {count} pages.")
     final_assets = {k: list(v) for k, v in all_assets.items()}
-    return combined_text, site_structure, final_assets, global_stats
+    return "".join(combined_text_parts), site_structure, final_assets, global_stats
+
 
 # --- 4. SIDEBAR ---
 with st.sidebar:
     st.header("⚙️ SYSTEM CONTROL")
     api_key = st.text_input("API KEY", type="password", key="sidebar_api_key")
     st.divider()
-    
+
     model_options = [
-        "gemini-2.0-flash-exp", 
-        "gemini-3-pro-preview", 
-        "gemini-2.5-flash", 
-        "gemini-1.5-pro", 
-        "gemini-1.5-flash", 
+        "gemini-2.0-flash-exp",
+        "gemini-3-pro-preview",
+        "gemini-2.5-flash",
+        "gemini-1.5-pro",
+        "gemini-1.5-flash",
         "Custom (Type new...)"
     ]
-    selected_option = st.selectbox("MODEL", model_options, key="sidebar_model_select")
-    
+    selected_option = st.selectbox(
+        "MODEL", model_options, key="sidebar_model_select")
+
     if selected_option == "Custom (Type new...)":
-        model_name = st.text_input("ENTER CUSTOM MODEL NAME", value="gemini-2.0-flash-exp", key="sidebar_custom_model")
+        model_name = st.text_input(
+            "ENTER CUSTOM MODEL NAME", value="gemini-2.0-flash-exp", key="sidebar_custom_model")
     else:
         model_name = selected_option
     st.caption(f"Active Model: `{model_name}`")
@@ -226,24 +262,25 @@ if not api_key:
 
 genai.configure(api_key=api_key)
 
-tab1, tab2, tab3, tab4 = st.tabs(["✨ PROMPT ARCHITECT", "🕷️ DEEP NET SCANNER", "👁️ VISION REPLICATOR", "📜 HISTORY"])
+tab1, tab2, tab3, tab4 = st.tabs(
+    ["✨ PROMPT ARCHITECT", "🕷️ DEEP NET SCANNER", "👁️ VISION REPLICATOR", "📜 HISTORY"])
 
 # ==========================================
 # TAB 1: PROMPT ARCHITECT (CLEAN OUTPUT FIX)
 # ==========================================
 with tab1:
     st.header("✨ The Architect Engine")
-    
+
     mode = st.selectbox("STRATEGY", [
-        "⚡ Vibe Coder (Bolt/Antigravity)", 
-        "🧠 Super-System (The Architect)", 
-        "✨ Auto-Detect (AI Decides)", 
-        "CO-STAR (General Writing)", 
-        "Chain of Thought (Logic)", 
-        "Senior Coder (Python/JS)", 
-        "Email Polisher", 
-        "S.M.A.R.T. (Business)", 
-        "The 5 Ws (Reporting)", 
+        "⚡ Vibe Coder (Bolt/Antigravity)",
+        "🧠 Super-System (The Architect)",
+        "✨ Auto-Detect (AI Decides)",
+        "CO-STAR (General Writing)",
+        "Chain of Thought (Logic)",
+        "Senior Coder (Python/JS)",
+        "Email Polisher",
+        "S.M.A.R.T. (Business)",
+        "The 5 Ws (Reporting)",
         "Custom Persona"
     ], key="tab1_strategy")
 
@@ -253,28 +290,33 @@ with tab1:
         "🧠 Super-System (The Architect)": "🏗️ **Best for Complex Tasks.** Builds a massive Protocol with Constraints & Knowledge Base.",
         "✨ Auto-Detect (AI Decides)": "🤖 **Best for General.** Analyzes intent and picks the best framework.",
     }
-    if mode in descriptions: st.info(descriptions[mode])
+    if mode in descriptions:
+        st.info(descriptions[mode])
 
     vibe_type = "Genesis"
     agent_name = "Expert"
     complexity = "God-Mode"
 
     if mode == "⚡ Vibe Coder (Bolt/Antigravity)":
-        vibe_type = st.radio("STAGE?", ["Genesis (Start New)", "Refiner (Polish UI)", "Logic Fixer (Debug)"], horizontal=True, key="tab1_vibe")
+        vibe_type = st.radio("STAGE?", ["Genesis (Start New)", "Refiner (Polish UI)",
+                             "Logic Fixer (Debug)"], horizontal=True, key="tab1_vibe")
     elif mode == "Custom Persona":
-        agent_name = st.text_input("WHO IS THE AGENT?", placeholder="e.g. Steve Jobs", key="tab1_persona")
+        agent_name = st.text_input(
+            "WHO IS THE AGENT?", placeholder="e.g. Steve Jobs", key="tab1_persona")
     elif mode == "🧠 Super-System (The Architect)":
-        complexity = st.select_slider("DEPTH", ["Standard", "Detailed", "God-Mode"], value="God-Mode", key="tab1_slider")
+        complexity = st.select_slider(
+            "DEPTH", ["Standard", "Detailed", "God-Mode"], value="God-Mode", key="tab1_slider")
 
-    raw_prompt = st.text_area("YOUR REQUEST", height=150, placeholder="e.g. build a to-do app...", key="tab1_input")
-    
+    raw_prompt = st.text_area("YOUR REQUEST", height=150,
+                              placeholder="e.g. build a to-do app...", key="tab1_input")
+
     if st.button("🚀 ARCHITECT PROMPT", type="primary", key="tab1_btn"):
         if not raw_prompt:
             st.warning("Input required.")
         else:
             with st.spinner("Architecting Super-Prompt..."):
                 system_instruction = ""
-                
+
                 # CLEAN CODE PROTOCOL: Removed excessive formatting
                 formatting_rules = """
                 FORMATTING RULES:
@@ -283,7 +325,7 @@ with tab1:
                 3. Do NOT use excessive bolding (***). Only bold keys like **Role:**.
                 4. Do NOT use complex nesting. Keep it flat and readable.
                 """
-                
+
                 if mode == "⚡ Vibe Coder (Bolt/Antigravity)":
                     system_instruction = f"""
                     You are the "Vibe Coder" Architect.
@@ -330,47 +372,63 @@ with tab1:
                 elif mode == "CO-STAR (General Writing)":
                     system_instruction = f"Rewrite using CO-STAR. {formatting_rules} INPUT: '{raw_prompt}'"
                 elif mode == "Custom Persona":
-                     system_instruction = f"Act as {agent_name}. Rewrite exactly how they would speak. {formatting_rules} INPUT: '{raw_prompt}'"
+                    system_instruction = f"Act as {agent_name}. Rewrite exactly how they would speak. {formatting_rules} INPUT: '{raw_prompt}'"
                 else:
                     system_instruction = f"Rewrite professionally using {mode}. {formatting_rules} INPUT: '{raw_prompt}'"
 
                 res = generate_with_fallback(model_name, system_instruction)
-                if res: 
+                if res:
                     render_output_console(res.text)
-                    add_to_history(api_key, f"Prompt Architect ({mode})", raw_prompt, res.text)
+                    add_to_history(
+                        api_key, f"Prompt Architect ({mode})", raw_prompt, res.text)
 
 # ==========================================
 # TAB 2: DEEP NET SCANNER
 # ==========================================
 with tab2:
     st.header("🕷️ Deep Net Scanner")
-    
-    if 'messages' not in st.session_state: st.session_state.messages = []
-    if 'knowledge_base' not in st.session_state: st.session_state.knowledge_base = ""
-    if 'scanned_url' not in st.session_state: st.session_state.scanned_url = ""
-    if 'global_stats' not in st.session_state: st.session_state.global_stats = {}
+
+    if 'messages' not in st.session_state:
+        st.session_state.messages = []
+    if 'knowledge_base' not in st.session_state:
+        st.session_state.knowledge_base = ""
+    if 'scanned_url' not in st.session_state:
+        st.session_state.scanned_url = ""
+    if 'global_stats' not in st.session_state:
+        st.session_state.global_stats = {}
 
     c1, c2 = st.columns([3, 1])
-    with c1: url = st.text_input("TARGET URL", placeholder="https://example.com", key="tab2_url")
-    with c2: crawl_scope = st.selectbox("SCOPE", ["Home Page Only", "Quick Scan (5 Pages)", "Deep Scan (20 Pages)", "Massive Scan (50 Pages)"], key="tab2_scope")
+    with c1:
+        url = st.text_input(
+            "TARGET URL", placeholder="https://example.com", key="tab2_url")
+    with c2:
+        crawl_scope = st.selectbox("SCOPE", ["Home Page Only", "Quick Scan (5 Pages)",
+                                   "Deep Scan (20 Pages)", "Massive Scan (50 Pages)"], key="tab2_scope")
 
     page_limit = 1
-    if "Quick" in crawl_scope: page_limit = 5
-    if "Deep" in crawl_scope: page_limit = 20
-    if "Massive" in crawl_scope: page_limit = 50
-    
+    if "Quick" in crawl_scope:
+        page_limit = 5
+    if "Deep" in crawl_scope:
+        page_limit = 20
+    if "Massive" in crawl_scope:
+        page_limit = 50
+
     if st.button("🕷️ INITIATE SCAN", type="primary", key="tab2_btn"):
-        if not url: st.warning("URL REQUIRED")
+        if not url:
+            st.warning("URL REQUIRED")
         else:
-            full_text, structure, assets, stats = recursive_crawl(url, max_pages=page_limit)
-            
+            full_text, structure, assets, stats = recursive_crawl(
+                url, max_pages=page_limit)
+
             kb_content = f"""SOURCE URL: {url}\nSTATS: {json.dumps(stats)}\nSITE MAP: {json.dumps(structure)}\nASSETS: {json.dumps(assets)}\nCONTENT: {full_text}"""
             st.session_state.scanned_url = url
             st.session_state.global_stats = stats
             st.session_state.knowledge_base = kb_content
-            st.session_state.messages = [{"role": "assistant", "content": f"**SCAN COMPLETE.** Analyzed {stats['pages']} pages. Found {stats['buttons']} buttons. Ready for queries."}]
-            
-            add_to_history(api_key, "Web Scanner", url, f"Scanned {stats['pages']} pages. Found {len(assets['fonts'])} fonts.")
+            st.session_state.messages = [
+                {"role": "assistant", "content": f"**SCAN COMPLETE.** Analyzed {stats['pages']} pages. Found {stats['buttons']} buttons. Ready for queries."}]
+
+            add_to_history(api_key, "Web Scanner", url,
+                           f"Scanned {stats['pages']} pages. Found {len(assets['fonts'])} fonts.")
             st.rerun()
 
     if st.session_state.knowledge_base:
@@ -385,13 +443,16 @@ with tab2:
 
         st.divider()
         st.subheader(f"💬 DATA LINK: {st.session_state.scanned_url}")
-        
+
         for msg in st.session_state.messages:
-            with st.chat_message(msg["role"]): st.markdown(msg["content"])
+            with st.chat_message(msg["role"]):
+                st.markdown(msg["content"])
 
         if user_input := st.chat_input("QUERY DATABASE...", key="tab2_chat"):
-            st.session_state.messages.append({"role": "user", "content": user_input})
-            with st.chat_message("user"): st.markdown(user_input)
+            st.session_state.messages.append(
+                {"role": "user", "content": user_input})
+            with st.chat_message("user"):
+                st.markdown(user_input)
 
             with st.chat_message("assistant"):
                 with st.spinner("COMPUTING..."):
@@ -399,31 +460,40 @@ with tab2:
                     response = generate_with_fallback(model_name, chat_prompt)
                     if response:
                         st.markdown(response.text)
-                        st.session_state.messages.append({"role": "assistant", "content": response.text})
-        
+                        st.session_state.messages.append(
+                            {"role": "assistant", "content": response.text})
+
         with st.expander("📦 RAW DATA EXPORT"):
-            st.download_button("DOWNLOAD JSON", st.session_state.knowledge_base, file_name="scan_data.json")
+            st.download_button(
+                "DOWNLOAD JSON", st.session_state.knowledge_base, file_name="scan_data.json")
 
 # ==========================================
 # TAB 3: VISION REPLICATOR
 # ==========================================
 with tab3:
     st.header("👁️ Vision Replicator")
-    uploaded_file = st.file_uploader("UPLOAD INTERFACE IMAGE", type=['png', 'jpg', 'jpeg'], key="tab3_upload")
+    uploaded_file = st.file_uploader("UPLOAD INTERFACE IMAGE", type=[
+                                     'png', 'jpg', 'jpeg'], key="tab3_upload")
     c1, c2 = st.columns(2)
-    with c1: stack = st.selectbox("TECH STACK", ["Next.js + Tailwind", "React + Three.js", "HTML/CSS"], key="tab3_stack")
-    with c2: vibe = st.text_input("VIBE", placeholder="Cyberpunk, Clean", key="tab3_vibe")
+    with c1:
+        stack = st.selectbox("TECH STACK", [
+                             "Next.js + Tailwind", "React + Three.js", "HTML/CSS"], key="tab3_stack")
+    with c2:
+        vibe = st.text_input(
+            "VIBE", placeholder="Cyberpunk, Clean", key="tab3_vibe")
 
     if st.button("🧬 GENERATE REPLICA CODE", key="tab3_btn"):
-        if not uploaded_file: st.warning("UPLOAD REQUIRED")
+        if not uploaded_file:
+            st.warning("UPLOAD REQUIRED")
         else:
             with st.spinner("ANALYZING PIXELS..."):
                 img = Image.open(uploaded_file)
                 prompt = f"Act as Senior Frontend Dev. Write system prompt to build this exact UI using {stack}. Vibe: {vibe}."
                 res = generate_with_fallback(model_name, prompt, image=img)
-                if res: 
+                if res:
                     render_output_console(res.text)
-                    add_to_history(api_key, "Vision Replicator", f"Image Upload: {stack}", res.text)
+                    add_to_history(api_key, "Vision Replicator",
+                                   f"Image Upload: {stack}", res.text)
 
 # ==========================================
 # TAB 4: HISTORY ARCHIVE
@@ -431,7 +501,7 @@ with tab3:
 with tab4:
     st.header("📜 History Archive")
     st.caption("Past generations saved locally by API Key.")
-    
+
     if st.button("🗑️ Clear My History", key="tab4_clear"):
         clear_user_history(api_key)
         st.success("History wiped.")
