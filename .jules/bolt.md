@@ -1,0 +1,3 @@
+## 2024-03-24 - Optimization of recursive_crawl
+**Learning:** In `app.py`, the `recursive_crawl` function was establishing a new TCP connection for every page visit using `requests.get()`. This is inefficient for crawling the same domain. Using `requests.Session()` allows for connection pooling (Keep-Alive), significantly reducing latency. Additionally, using `+=` for string concatenation in a loop is $O(n^2)$. Switching to list `append()` and `"".join()` is $O(n)$.
+**Action:** Always use `requests.Session()` when making multiple requests to the same host. Always use list accumulation for building large strings in loops.
