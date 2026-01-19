@@ -122,14 +122,20 @@ def render_output_console(content):
         st.success("✅ Ready to Copy.")
 
 def recursive_crawl(start_url, max_pages=5):
+    # Performance Optimization: Use Session for connection pooling (reuse TCP connections)
+    session = requests.Session()
+    session.headers.update({'User-Agent': 'Mozilla/5.0'})
+
     visited = set()
     queue = [start_url]
-    combined_text = ""
+
+    # Performance Optimization: Use list accumulation instead of string concatenation (O(n) vs O(n^2))
+    combined_text_list = []
+
     site_structure = {} 
     all_assets = {"fonts": set(), "icons": set(), "images": set()}
     global_stats = {"pages": 0, "buttons": 0, "links": 0, "images": 0, "inputs": 0, "words": 0}
     
-    headers = {'User-Agent': 'Mozilla/5.0'}
     base_domain = urlparse(start_url).netloc
     
     progress_bar = st.progress(0)
@@ -143,7 +149,8 @@ def recursive_crawl(start_url, max_pages=5):
         
         try:
             status_text.markdown(f"**🕷️ Scanning Page {count+1}/{max_pages}:** `{url}`")
-            response = requests.get(url, headers=headers, timeout=5)
+            # Reuse session
+            response = session.get(url, timeout=5)
             if response.status_code != 200: continue
             soup = BeautifulSoup(response.content, 'html.parser')
             
@@ -177,7 +184,7 @@ def recursive_crawl(start_url, max_pages=5):
             all_assets['fonts'].update(page_assets['fonts'])
             all_assets['icons'].update(page_assets['icons'])
             
-            combined_text += f"\n\n--- PAGE: {title} ({url}) ---\nDETECTED SCRIPTS: {scripts[:5]}\nCONTENT: {text_content[:4000]}"
+            combined_text_list.append(f"\n\n--- PAGE: {title} ({url}) ---\nDETECTED SCRIPTS: {scripts[:5]}\nCONTENT: {text_content[:4000]}")
             visited.add(url)
             count += 1
             
@@ -192,6 +199,9 @@ def recursive_crawl(start_url, max_pages=5):
     progress_bar.progress(100)
     status_text.success(f"✅ Mission Complete! Scanned {count} pages.")
     final_assets = {k: list(v) for k, v in all_assets.items()}
+
+    # Join list at the end
+    combined_text = "".join(combined_text_list)
     return combined_text, site_structure, final_assets, global_stats
 
 # --- 4. SIDEBAR ---

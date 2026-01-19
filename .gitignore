@@ -1,0 +1,4 @@
+__pycache__/
+*.pyc
+god_mode_history.json
+.jules/
