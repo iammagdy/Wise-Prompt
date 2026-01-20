@@ -205,8 +205,12 @@ def recursive_crawl(start_url, max_pages=5):
                 all_assets['icons'].update(page_assets['icons'])
 
                 # OPTIMIZATION: Accumulate strings in list, join at end
-                combined_text_parts.append(
-                    f"\n\n--- PAGE: {title} ({url}) ---\nDETECTED SCRIPTS: {scripts[:5]}\nCONTENT: {text_content[:4000]}")
+                page_log = (
+                    f"\n\n--- PAGE: {title} ({url}) ---\n"
+                    f"DETECTED SCRIPTS: {scripts[:5]}\n"
+                    f"CONTENT: {text_content[:4000]}"
+                )
+                combined_text_parts.append(page_log)
                 visited.add(url)
                 count += 1
 
@@ -282,8 +286,12 @@ with tab1:
 
     # Briefs
     descriptions = {
-        "⚡ Vibe Coder (Bolt/Antigravity)": "💻 **Best for Coding.** Forces the AI to invent Tech Stack, UI Rules, and File Structure.",
-        "🧠 Super-System (The Architect)": "🏗️ **Best for Complex Tasks.** Builds a massive Protocol with Constraints & Knowledge Base.",
+        "⚡ Vibe Coder (Bolt/Antigravity)": (
+            "💻 **Best for Coding.** Forces the AI to invent Tech Stack, UI Rules, and File Structure."
+        ),
+        "🧠 Super-System (The Architect)": (
+            "🏗️ **Best for Complex Tasks.** Builds a massive Protocol with Constraints & Knowledge Base."
+        ),
         "✨ Auto-Detect (AI Decides)": "🤖 **Best for General.** Analyzes intent and picks the best framework.",
     }
     if mode in descriptions:
@@ -294,13 +302,21 @@ with tab1:
     complexity = "God-Mode"
 
     if mode == "⚡ Vibe Coder (Bolt/Antigravity)":
-        vibe_type = st.radio("STAGE?", ["Genesis (Start New)", "Refiner (Polish UI)",
-                             "Logic Fixer (Debug)"], horizontal=True, key="tab1_vibe")
+        vibe_type = st.radio(
+            "STAGE?",
+            ["Genesis (Start New)", "Refiner (Polish UI)", "Logic Fixer (Debug)"],
+            horizontal=True,
+            key="tab1_vibe"
+        )
     elif mode == "Custom Persona":
         agent_name = st.text_input("WHO IS THE AGENT?", placeholder="e.g. Steve Jobs", key="tab1_persona")
     elif mode == "🧠 Super-System (The Architect)":
-        complexity = st.select_slider("DEPTH", ["Standard", "Detailed", "God-Mode"],
-                                      value="God-Mode", key="tab1_slider")
+        complexity = st.select_slider(
+            "DEPTH",
+            ["Standard", "Detailed", "God-Mode"],
+            value="God-Mode",
+            key="tab1_slider"
+        )
 
     raw_prompt = st.text_area("YOUR REQUEST", height=150, placeholder="e.g. build a to-do app...", key="tab1_input")
 
@@ -321,54 +337,57 @@ with tab1:
                 """
 
                 if mode == "⚡ Vibe Coder (Bolt/Antigravity)":
-                    system_instruction = f"""
-                    You are the "Vibe Coder" Architect.
-                    USER REQUEST: "{raw_prompt}"
-                    FRAMEWORK: {vibe_type}
-                    TASK: Write a "God-Mode" System Prompt for an AI Developer.
-                    {formatting_rules}
-
-                    STRICT OUTPUT STRUCTURE (Markdown):
-                    # 1. Role
-                    # 2. Project & Tech Stack (Invent modern stack)
-                    # 3. Core Features (Functional)
-                    # 4. UI/UX & "Vibe"
-                    # 5. Component Architecture
-                    # 6. FEW-SHOT TRAINING (Crucial)
-                    """
+                    system_instruction = (
+                        f"You are the \"Vibe Coder\" Architect.\n"
+                        f"USER REQUEST: \"{raw_prompt}\"\n"
+                        f"FRAMEWORK: {vibe_type}\n"
+                        f"TASK: Write a \"God-Mode\" System Prompt for an AI Developer.\n"
+                        f"{formatting_rules}\n"
+                        "\n"
+                        "STRICT OUTPUT STRUCTURE (Markdown):\n"
+                        "# 1. Role\n"
+                        "# 2. Project & Tech Stack (Invent modern stack)\n"
+                        "# 3. Core Features (Functional)\n"
+                        "# 4. UI/UX & \"Vibe\"\n"
+                        "# 5. Component Architecture\n"
+                        "# 6. FEW-SHOT TRAINING (Crucial)\n"
+                    )
 
                 elif mode == "🧠 Super-System (The Architect)":
-                    system_instruction = f"""
-                    You are the World's Greatest Prompt Architect.
-                    USER INPUT: "{raw_prompt}"
-                    INTENSITY: {complexity}
-                    GOAL: Transform this into a massive, world-class "System Protocol".
-                    {formatting_rules}
-
-                    STRICT OUTPUT STRUCTURE (Markdown):
-                    # 1. MISSION PROFILE
-                    # 2. STRATEGIC PROTOCOL
-                    # 3. KNOWLEDGE BASE & BEST PRACTICES
-                    # 4. CONSTRAINTS & GUARDRAILS
-                    # 5. OUTPUT FORMATTING
-                    """
+                    system_instruction = (
+                        f"You are the World's Greatest Prompt Architect.\n"
+                        f"USER INPUT: \"{raw_prompt}\"\n"
+                        f"INTENSITY: {complexity}\n"
+                        f"GOAL: Transform this into a massive, world-class \"System Protocol\".\n"
+                        f"{formatting_rules}\n"
+                        "\n"
+                        "STRICT OUTPUT STRUCTURE (Markdown):\n"
+                        "# 1. MISSION PROFILE\n"
+                        "# 2. STRATEGIC PROTOCOL\n"
+                        "# 3. KNOWLEDGE BASE & BEST PRACTICES\n"
+                        "# 4. CONSTRAINTS & GUARDRAILS\n"
+                        "# 5. OUTPUT FORMATTING\n"
+                    )
 
                 elif mode == "✨ Auto-Detect (AI Decides)":
-                    system_instruction = f"""
-                    Analyze: "{raw_prompt}".
-                    1. Detect intent.
-                    2. If Code, write a 'Vibe Coder' spec.
-                    3. If Logic/Writing, write a 'Super-System' protocol.
-                    4. Output ONLY the optimized prompt.
-                    {formatting_rules}
-                    """
+                    system_instruction = (
+                        f"Analyze: \"{raw_prompt}\".\n"
+                        "1. Detect intent.\n"
+                        "2. If Code, write a 'Vibe Coder' spec.\n"
+                        "3. If Logic/Writing, write a 'Super-System' protocol.\n"
+                        "4. Output ONLY the optimized prompt.\n"
+                        f"{formatting_rules}\n"
+                    )
 
                 elif mode == "CO-STAR (General Writing)":
                     system_instruction = f"Rewrite using CO-STAR. {formatting_rules} INPUT: '{raw_prompt}'"
                 elif mode == "Custom Persona":
-                    system_instruction = f"Act as {agent_name}. Rewrite exactly how they would speak. {formatting_rules} INPUT: '{raw_prompt}'"
+                    persona_prompt = f"Act as {agent_name}. Rewrite exactly how they would speak."
+                    system_instruction = f"{persona_prompt} {formatting_rules} INPUT: '{raw_prompt}'"
                 else:
-                    system_instruction = f"Rewrite professionally using {mode}. {formatting_rules} INPUT: '{raw_prompt}'"
+                    system_instruction = (
+                        f"Rewrite professionally using {mode}. {formatting_rules} INPUT: '{raw_prompt}'"
+                    )
 
                 res = generate_with_fallback(model_name, system_instruction)
                 if res:
@@ -415,15 +434,25 @@ with tab2:
         else:
             full_text, structure, assets, stats = recursive_crawl(url, max_pages=page_limit)
 
-            kb_content = f"""SOURCE URL: {url}\nSTATS: {
-                json.dumps(stats)}\nSITE MAP: {
-                json.dumps(structure)}\nASSETS: {
-                json.dumps(assets)}\nCONTENT: {full_text}"""
+            kb_content = (
+                f"SOURCE URL: {url}\n"
+                f"STATS: {json.dumps(stats)}\n"
+                f"SITE MAP: {json.dumps(structure)}\n"
+                f"ASSETS: {json.dumps(assets)}\n"
+                f"CONTENT: {full_text}"
+            )
             st.session_state.scanned_url = url
             st.session_state.global_stats = stats
             st.session_state.knowledge_base = kb_content
-            st.session_state.messages = [
-                {"role": "assistant", "content": f"**SCAN COMPLETE.** Analyzed {stats['pages']} pages. Found {stats['buttons']} buttons. Ready for queries."}]
+
+            msg_content = (
+                f"**SCAN COMPLETE.** Analyzed {stats['pages']} pages. "
+                f"Found {stats['buttons']} buttons. Ready for queries."
+            )
+            st.session_state.messages = [{
+                "role": "assistant",
+                "content": msg_content
+            }]
 
             add_to_history(api_key, "Web Scanner", url,
                            f"Scanned {stats['pages']} pages. Found {len(assets['fonts'])} fonts.")
@@ -453,7 +482,9 @@ with tab2:
 
             with st.chat_message("assistant"):
                 with st.spinner("COMPUTING..."):
-                    chat_prompt = f"Expert Architect. KB: {st.session_state.knowledge_base[:30000]}. Q: {user_input}"
+                    # Truncate KB to avoid context limits, ensuring prompt stays reasonable
+                    kb_snippet = st.session_state.knowledge_base[:30000]
+                    chat_prompt = f"Expert Architect. KB: {kb_snippet}. Q: {user_input}"
                     response = generate_with_fallback(model_name, chat_prompt)
                     if response:
                         st.markdown(response.text)
@@ -480,7 +511,10 @@ with tab3:
         else:
             with st.spinner("ANALYZING PIXELS..."):
                 img = Image.open(uploaded_file)
-                prompt = f"Act as Senior Frontend Dev. Write system prompt to build this exact UI using {stack}. Vibe: {vibe}."
+                prompt = (
+                    f"Act as Senior Frontend Dev. Write system prompt to build this exact UI using {stack}. "
+                    f"Vibe: {vibe}."
+                )
                 res = generate_with_fallback(model_name, prompt, image=img)
                 if res:
                     render_output_console(res.text)
