@@ -1,0 +1,3 @@
+## 2025-02-18 - Benchmarking Streamlit Apps
+**Learning:** `app.py` executes top-level Streamlit commands (`st.set_page_config`, `st.sidebar`, etc.) immediately upon import. This makes unit testing and benchmarking individual functions (like `recursive_crawl`) difficult without extensive mocking of `sys.modules["streamlit"]`.
+**Action:** When creating benchmarks for Streamlit apps, always mock `streamlit` in `sys.modules` *before* importing the app. Ensure `st.columns`, `st.tabs`, and `st.sidebar` are mocked with appropriate return values (iterables/context managers) to prevent `AttributeError` or runtime errors during import.

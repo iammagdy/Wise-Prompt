@@ -129,65 +129,68 @@ def recursive_crawl(start_url, max_pages=5):
     all_assets = {"fonts": set(), "icons": set(), "images": set()}
     global_stats = {"pages": 0, "buttons": 0, "links": 0, "images": 0, "inputs": 0, "words": 0}
     
-    headers = {'User-Agent': 'Mozilla/5.0'}
     base_domain = urlparse(start_url).netloc
     
     progress_bar = st.progress(0)
     status_text = st.empty()
     count = 0
     
-    while queue and count < max_pages:
-        progress_bar.progress(min(int((count / max_pages) * 100), 99))
-        url = queue.pop(0)
-        if url in visited: continue
+    # ⚡ Bolt Optimization: Use Session for connection pooling (Keep-Alive)
+    with requests.Session() as session:
+        session.headers.update({'User-Agent': 'Mozilla/5.0'})
         
-        try:
-            status_text.markdown(f"**🕷️ Scanning Page {count+1}/{max_pages}:** `{url}`")
-            response = requests.get(url, headers=headers, timeout=5)
-            if response.status_code != 200: continue
-            soup = BeautifulSoup(response.content, 'html.parser')
+        while queue and count < max_pages:
+            progress_bar.progress(min(int((count / max_pages) * 100), 99))
+            url = queue.pop(0)
+            if url in visited: continue
             
-            global_stats["buttons"] += len(soup.find_all('button'))
-            global_stats["links"] += len(soup.find_all('a'))
-            global_stats["images"] += len(soup.find_all('img'))
-            global_stats["inputs"] += len(soup.find_all('input'))
-            text_content = soup.get_text(separator=' ', strip=True)
-            global_stats["words"] += len(text_content.split())
-            global_stats["pages"] += 1
-            
-            scripts = [s.get('src') for s in soup.find_all('script') if s.get('src')]
-            title = soup.title.string if soup.title else "No Title"
-            site_structure[url] = {"title": title, "scripts": scripts[:3]}
-            
-            def extract_assets_internal(soup, url):
-                assets = {"fonts": [], "icons": [], "images": []}
-                for link in soup.find_all('link', href=True):
-                    href = link['href']
-                    if 'fonts.googleapis.com' in href or href.endswith('.woff'): assets['fonts'].append(urljoin(url, href))
-                for link in soup.find_all('link', rel=True):
-                    if 'icon' in str(link.get('rel')): assets['icons'].append(urljoin(url, link.get('href', '')))
-                for img in soup.find_all('img', src=True):
-                    src = img['src']
-                    full_src = urljoin(url, src)
-                    if 'logo' in src.lower() or src.endswith('.svg'): assets['icons'].append(full_src)
-                    else: assets['images'].append(full_src)
-                return assets
+            try:
+                status_text.markdown(f"**🕷️ Scanning Page {count+1}/{max_pages}:** `{url}`")
+                response = session.get(url, timeout=5)
+                if response.status_code != 200: continue
+                soup = BeautifulSoup(response.content, 'html.parser')
 
-            page_assets = extract_assets_internal(soup, url)
-            all_assets['fonts'].update(page_assets['fonts'])
-            all_assets['icons'].update(page_assets['icons'])
-            
-            combined_text += f"\n\n--- PAGE: {title} ({url}) ---\nDETECTED SCRIPTS: {scripts[:5]}\nCONTENT: {text_content[:4000]}"
-            visited.add(url)
-            count += 1
-            
-            for link in soup.find_all('a', href=True):
-                href = link['href']
-                full_url = urljoin(url, href)
-                if urlparse(full_url).netloc == base_domain and full_url not in visited and full_url not in queue:
-                    queue.append(full_url)
-            time.sleep(0.3)
-        except: pass
+                global_stats["buttons"] += len(soup.find_all('button'))
+                global_stats["links"] += len(soup.find_all('a'))
+                global_stats["images"] += len(soup.find_all('img'))
+                global_stats["inputs"] += len(soup.find_all('input'))
+                text_content = soup.get_text(separator=' ', strip=True)
+                global_stats["words"] += len(text_content.split())
+                global_stats["pages"] += 1
+
+                scripts = [s.get('src') for s in soup.find_all('script') if s.get('src')]
+                title = soup.title.string if soup.title else "No Title"
+                site_structure[url] = {"title": title, "scripts": scripts[:3]}
+
+                def extract_assets_internal(soup, url):
+                    assets = {"fonts": [], "icons": [], "images": []}
+                    for link in soup.find_all('link', href=True):
+                        href = link['href']
+                        if 'fonts.googleapis.com' in href or href.endswith('.woff'): assets['fonts'].append(urljoin(url, href))
+                    for link in soup.find_all('link', rel=True):
+                        if 'icon' in str(link.get('rel')): assets['icons'].append(urljoin(url, link.get('href', '')))
+                    for img in soup.find_all('img', src=True):
+                        src = img['src']
+                        full_src = urljoin(url, src)
+                        if 'logo' in src.lower() or src.endswith('.svg'): assets['icons'].append(full_src)
+                        else: assets['images'].append(full_src)
+                    return assets
+
+                page_assets = extract_assets_internal(soup, url)
+                all_assets['fonts'].update(page_assets['fonts'])
+                all_assets['icons'].update(page_assets['icons'])
+
+                combined_text += f"\n\n--- PAGE: {title} ({url}) ---\nDETECTED SCRIPTS: {scripts[:5]}\nCONTENT: {text_content[:4000]}"
+                visited.add(url)
+                count += 1
+
+                for link in soup.find_all('a', href=True):
+                    href = link['href']
+                    full_url = urljoin(url, href)
+                    if urlparse(full_url).netloc == base_domain and full_url not in visited and full_url not in queue:
+                        queue.append(full_url)
+                time.sleep(0.3)
+            except: pass
             
     progress_bar.progress(100)
     status_text.success(f"✅ Mission Complete! Scanned {count} pages.")
