@@ -7,6 +7,7 @@ import json
 import re
 import time
 import os
+from collections import deque
 from datetime import datetime
 from urllib.parse import urljoin, urlparse
 
@@ -123,8 +124,9 @@ def render_output_console(content):
 
 def recursive_crawl(start_url, max_pages=5):
     visited = set()
-    queue = [start_url]
-    combined_text = ""
+    queue = deque([start_url])  # Optimization: Use deque for O(1) pops
+    queued_urls = {start_url}   # Optimization: Track queued URLs for O(1) lookups
+    combined_text_parts = []    # Optimization: Use list for O(N) string construction
     site_structure = {} 
     all_assets = {"fonts": set(), "icons": set(), "images": set()}
     global_stats = {"pages": 0, "buttons": 0, "links": 0, "images": 0, "inputs": 0, "words": 0}
@@ -138,7 +140,7 @@ def recursive_crawl(start_url, max_pages=5):
     
     while queue and count < max_pages:
         progress_bar.progress(min(int((count / max_pages) * 100), 99))
-        url = queue.pop(0)
+        url = queue.popleft()  # Optimization: O(1) pop
         if url in visited: continue
         
         try:
@@ -176,22 +178,28 @@ def recursive_crawl(start_url, max_pages=5):
             page_assets = extract_assets_internal(soup, url)
             all_assets['fonts'].update(page_assets['fonts'])
             all_assets['icons'].update(page_assets['icons'])
+            all_assets['images'].update(page_assets['images'])  # Fix: images were missed
             
-            combined_text += f"\n\n--- PAGE: {title} ({url}) ---\nDETECTED SCRIPTS: {scripts[:5]}\nCONTENT: {text_content[:4000]}"
+            combined_text_parts.append(
+                f"\n\n--- PAGE: {title} ({url}) ---\nDETECTED SCRIPTS: {scripts[:5]}\nCONTENT: {text_content[:4000]}"
+            )
             visited.add(url)
             count += 1
             
             for link in soup.find_all('a', href=True):
                 href = link['href']
                 full_url = urljoin(url, href)
-                if urlparse(full_url).netloc == base_domain and full_url not in visited and full_url not in queue:
+                # Optimization: O(1) check using set vs O(N) check in list
+                if urlparse(full_url).netloc == base_domain and full_url not in visited and full_url not in queued_urls:
                     queue.append(full_url)
+                    queued_urls.add(full_url)
             time.sleep(0.3)
         except: pass
             
     progress_bar.progress(100)
     status_text.success(f"✅ Mission Complete! Scanned {count} pages.")
     final_assets = {k: list(v) for k, v in all_assets.items()}
+    combined_text = "".join(combined_text_parts)  # Optimization: Join list at the end
     return combined_text, site_structure, final_assets, global_stats
 
 # --- 4. SIDEBAR ---
