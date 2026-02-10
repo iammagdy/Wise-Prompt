@@ -9,6 +9,7 @@ import time
 import os
 from datetime import datetime
 from urllib.parse import urljoin, urlparse
+from collections import deque
 
 # --- 1. PAGE CONFIG & RESPONSIVE CSS ---
 st.set_page_config(
@@ -123,8 +124,14 @@ def render_output_console(content):
 
 def recursive_crawl(start_url, max_pages=5):
     visited = set()
-    queue = [start_url]
-    combined_text = ""
+    # OPTIMIZATION: Use deque for O(1) pops from the left
+    queue = deque([start_url])
+    # OPTIMIZATION: Track queued URLs for O(1) membership checks
+    queued_urls = {start_url}
+
+    # OPTIMIZATION: Use list append and join for O(N) string construction instead of O(N^2) concatenation
+    combined_text_list = []
+
     site_structure = {} 
     all_assets = {"fonts": set(), "icons": set(), "images": set()}
     global_stats = {"pages": 0, "buttons": 0, "links": 0, "images": 0, "inputs": 0, "words": 0}
@@ -138,8 +145,9 @@ def recursive_crawl(start_url, max_pages=5):
     
     while queue and count < max_pages:
         progress_bar.progress(min(int((count / max_pages) * 100), 99))
-        url = queue.pop(0)
-        if url in visited: continue
+        url = queue.popleft()  # OPTIMIZATION: O(1) pop
+        if url in visited:
+            continue
         
         try:
             status_text.markdown(f"**🕷️ Scanning Page {count+1}/{max_pages}:** `{url}`")
@@ -177,20 +185,25 @@ def recursive_crawl(start_url, max_pages=5):
             all_assets['fonts'].update(page_assets['fonts'])
             all_assets['icons'].update(page_assets['icons'])
             
-            combined_text += f"\n\n--- PAGE: {title} ({url}) ---\nDETECTED SCRIPTS: {scripts[:5]}\nCONTENT: {text_content[:4000]}"
+            combined_text_list.append(f"\n\n--- PAGE: {title} ({url}) ---\nDETECTED SCRIPTS: {scripts[:5]}\nCONTENT: {text_content[:4000]}")
             visited.add(url)
             count += 1
             
             for link in soup.find_all('a', href=True):
                 href = link['href']
                 full_url = urljoin(url, href)
-                if urlparse(full_url).netloc == base_domain and full_url not in visited and full_url not in queue:
+                # OPTIMIZATION: Check against queued_urls set (O(1))
+                is_internal = urlparse(full_url).netloc == base_domain
+                if is_internal and full_url not in visited and full_url not in queued_urls:
                     queue.append(full_url)
+                    queued_urls.add(full_url)
             time.sleep(0.3)
         except: pass
             
     progress_bar.progress(100)
     status_text.success(f"✅ Mission Complete! Scanned {count} pages.")
+
+    combined_text = "".join(combined_text_list)
     final_assets = {k: list(v) for k, v in all_assets.items()}
     return combined_text, site_structure, final_assets, global_stats
 
