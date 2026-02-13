@@ -9,6 +9,7 @@ import time
 import os
 from datetime import datetime
 from urllib.parse import urljoin, urlparse
+from collections import deque
 
 # --- 1. PAGE CONFIG & RESPONSIVE CSS ---
 st.set_page_config(
@@ -123,13 +124,15 @@ def render_output_console(content):
 
 def recursive_crawl(start_url, max_pages=5):
     visited = set()
-    queue = [start_url]
+    queue = deque([start_url])
     combined_text = ""
     site_structure = {} 
     all_assets = {"fonts": set(), "icons": set(), "images": set()}
     global_stats = {"pages": 0, "buttons": 0, "links": 0, "images": 0, "inputs": 0, "words": 0}
     
     headers = {'User-Agent': 'Mozilla/5.0'}
+    session = requests.Session()
+    session.headers.update(headers)
     base_domain = urlparse(start_url).netloc
     
     progress_bar = st.progress(0)
@@ -138,12 +141,12 @@ def recursive_crawl(start_url, max_pages=5):
     
     while queue and count < max_pages:
         progress_bar.progress(min(int((count / max_pages) * 100), 99))
-        url = queue.pop(0)
+        url = queue.popleft()
         if url in visited: continue
         
         try:
             status_text.markdown(f"**🕷️ Scanning Page {count+1}/{max_pages}:** `{url}`")
-            response = requests.get(url, headers=headers, timeout=5)
+            response = session.get(url, timeout=5)
             if response.status_code != 200: continue
             soup = BeautifulSoup(response.content, 'html.parser')
             
