@@ -4,11 +4,11 @@ import requests
 from bs4 import BeautifulSoup
 from PIL import Image
 import json
-import re
 import time
 import os
 from datetime import datetime
 from urllib.parse import urljoin, urlparse
+from collections import deque
 
 # --- 1. PAGE CONFIG & RESPONSIVE CSS ---
 st.set_page_config(
@@ -121,30 +121,41 @@ def render_output_console(content):
         st.code(content, language="markdown")
         st.success("✅ Ready to Copy.")
 
+
 def recursive_crawl(start_url, max_pages=5):
     visited = set()
-    queue = [start_url]
+    # Optimized: Use deque for O(1) popleft() operations
+    queue = deque([start_url])
+    # Optimized: Use set for O(1) lookups to avoid adding duplicates to queue
+    seen_urls = {start_url}
     combined_text = ""
-    site_structure = {} 
+    site_structure = {}
     all_assets = {"fonts": set(), "icons": set(), "images": set()}
-    global_stats = {"pages": 0, "buttons": 0, "links": 0, "images": 0, "inputs": 0, "words": 0}
-    
+    global_stats = {
+        "pages": 0, "buttons": 0, "links": 0,
+        "images": 0, "inputs": 0, "words": 0
+    }
+
     headers = {'User-Agent': 'Mozilla/5.0'}
     base_domain = urlparse(start_url).netloc
-    
+
     progress_bar = st.progress(0)
     status_text = st.empty()
     count = 0
-    
+
     while queue and count < max_pages:
         progress_bar.progress(min(int((count / max_pages) * 100), 99))
-        url = queue.pop(0)
-        if url in visited: continue
-        
+        url = queue.popleft()
+        if url in visited:
+            continue
+
         try:
-            status_text.markdown(f"**🕷️ Scanning Page {count+1}/{max_pages}:** `{url}`")
+            status_text.markdown(
+                f"**🕷️ Scanning Page {count+1}/{max_pages}:** `{url}`"
+            )
             response = requests.get(url, headers=headers, timeout=5)
-            if response.status_code != 200: continue
+            if response.status_code != 200:
+                continue
             soup = BeautifulSoup(response.content, 'html.parser')
             
             global_stats["buttons"] += len(soup.find_all('button'))
@@ -155,7 +166,9 @@ def recursive_crawl(start_url, max_pages=5):
             global_stats["words"] += len(text_content.split())
             global_stats["pages"] += 1
             
-            scripts = [s.get('src') for s in soup.find_all('script') if s.get('src')]
+            scripts = [
+                s.get('src') for s in soup.find_all('script') if s.get('src')
+            ]
             title = soup.title.string if soup.title else "No Title"
             site_structure[url] = {"title": title, "scripts": scripts[:3]}
             
@@ -163,14 +176,21 @@ def recursive_crawl(start_url, max_pages=5):
                 assets = {"fonts": [], "icons": [], "images": []}
                 for link in soup.find_all('link', href=True):
                     href = link['href']
-                    if 'fonts.googleapis.com' in href or href.endswith('.woff'): assets['fonts'].append(urljoin(url, href))
+                    if ('fonts.googleapis.com' in href or
+                            href.endswith('.woff')):
+                        assets['fonts'].append(urljoin(url, href))
                 for link in soup.find_all('link', rel=True):
-                    if 'icon' in str(link.get('rel')): assets['icons'].append(urljoin(url, link.get('href', '')))
+                    if 'icon' in str(link.get('rel')):
+                        assets['icons'].append(
+                            urljoin(url, link.get('href', ''))
+                        )
                 for img in soup.find_all('img', src=True):
                     src = img['src']
                     full_src = urljoin(url, src)
-                    if 'logo' in src.lower() or src.endswith('.svg'): assets['icons'].append(full_src)
-                    else: assets['images'].append(full_src)
+                    if 'logo' in src.lower() or src.endswith('.svg'):
+                        assets['icons'].append(full_src)
+                    else:
+                        assets['images'].append(full_src)
                 return assets
 
             page_assets = extract_assets_internal(soup, url)
@@ -184,7 +204,10 @@ def recursive_crawl(start_url, max_pages=5):
             for link in soup.find_all('a', href=True):
                 href = link['href']
                 full_url = urljoin(url, href)
-                if urlparse(full_url).netloc == base_domain and full_url not in visited and full_url not in queue:
+                if (urlparse(full_url).netloc == base_domain and
+                        full_url not in visited and
+                        full_url not in seen_urls):
+                    seen_urls.add(full_url)
                     queue.append(full_url)
             time.sleep(0.3)
         except: pass
