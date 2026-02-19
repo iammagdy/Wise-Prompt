@@ -1,6 +1,7 @@
 import streamlit as st
 import google.generativeai as genai
 import requests
+import collections
 from bs4 import BeautifulSoup
 from PIL import Image
 import json
@@ -123,7 +124,8 @@ def render_output_console(content):
 
 def recursive_crawl(start_url, max_pages=5):
     visited = set()
-    queue = [start_url]
+    queue = collections.deque([start_url])
+    seen_urls = {start_url}  # Optimization: O(1) lookups instead of O(N) in queue
     combined_text = ""
     site_structure = {} 
     all_assets = {"fonts": set(), "icons": set(), "images": set()}
@@ -138,7 +140,7 @@ def recursive_crawl(start_url, max_pages=5):
     
     while queue and count < max_pages:
         progress_bar.progress(min(int((count / max_pages) * 100), 99))
-        url = queue.pop(0)
+        url = queue.popleft()  # Optimization: O(1) pop
         if url in visited: continue
         
         try:
@@ -184,7 +186,9 @@ def recursive_crawl(start_url, max_pages=5):
             for link in soup.find_all('a', href=True):
                 href = link['href']
                 full_url = urljoin(url, href)
-                if urlparse(full_url).netloc == base_domain and full_url not in visited and full_url not in queue:
+                # Optimization: check seen_urls (O(1)) instead of queue (O(N))
+                if urlparse(full_url).netloc == base_domain and full_url not in seen_urls:
+                    seen_urls.add(full_url)
                     queue.append(full_url)
             time.sleep(0.3)
         except: pass
