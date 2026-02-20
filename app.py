@@ -7,6 +7,7 @@ import json
 import re
 import time
 import os
+from collections import deque
 from datetime import datetime
 from urllib.parse import urljoin, urlparse
 
@@ -23,21 +24,21 @@ st.markdown("""
     /* --- MAIN THEME --- */
     .stApp { background-color: #0E1117; color: #00FF94; }
     [data-testid="stSidebar"] { background-color: #161B22; border-right: 1px solid #30363D; }
-    
+
     /* Inputs */
     .stTextInput input, .stTextArea textarea, .stSelectbox div[data-baseweb="select"] {
-        background-color: #0D1117 !important; 
-        color: #E6EDF3 !important; 
+        background-color: #0D1117 !important;
+        color: #E6EDF3 !important;
         border: 1px solid #30363D;
     }
-    
+
     /* Buttons */
     .stButton button { background-color: #238636; color: white; border: none; font-weight: bold; }
     .stButton button:hover { background-color: #2EA043; box-shadow: 0 0 15px #2EA043; }
-    
+
     /* Headers */
     h1, h2, h3 { font-family: 'Courier New', monospace; color: #E6EDF3; }
-    
+
     /* --- OUTPUT CONSOLE STYLING --- */
     .output-console {
         border: 2px solid #00FF94;
@@ -47,7 +48,7 @@ st.markdown("""
         margin-top: 20px;
         box-shadow: 0 0 20px rgba(0, 255, 148, 0.1);
     }
-    
+
     /* --- MOBILE OPTIMIZATIONS --- */
     @media only screen and (max-width: 600px) {
         .block-container { padding-top: 1rem; padding-left: 0.5rem; padding-right: 0.5rem; }
@@ -76,7 +77,7 @@ def add_to_history(api_key, tool_used, input_data, output_data):
     entry = {
         "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         "tool": tool_used,
-        "input": str(input_data)[:200] + "...", 
+        "input": str(input_data)[:200] + "...",
         "output": output_data
     }
     db[api_key].insert(0, entry)
@@ -122,31 +123,33 @@ def render_output_console(content):
         st.success("✅ Ready to Copy.")
 
 def recursive_crawl(start_url, max_pages=5):
-    visited = set()
-    queue = [start_url]
+    # OPTIMIZATION: Use deque for O(1) pops and set for O(1) lookups
+    # Replaces previous list-based queue which had O(N) operations
+    queue = deque([start_url])
+    seen_urls = {start_url}
+
     combined_text = ""
-    site_structure = {} 
+    site_structure = {}
     all_assets = {"fonts": set(), "icons": set(), "images": set()}
     global_stats = {"pages": 0, "buttons": 0, "links": 0, "images": 0, "inputs": 0, "words": 0}
-    
+
     headers = {'User-Agent': 'Mozilla/5.0'}
     base_domain = urlparse(start_url).netloc
-    
+
     progress_bar = st.progress(0)
     status_text = st.empty()
     count = 0
-    
+
     while queue and count < max_pages:
         progress_bar.progress(min(int((count / max_pages) * 100), 99))
-        url = queue.pop(0)
-        if url in visited: continue
-        
+        url = queue.popleft()  # O(1) operation
+
         try:
             status_text.markdown(f"**🕷️ Scanning Page {count+1}/{max_pages}:** `{url}`")
             response = requests.get(url, headers=headers, timeout=5)
             if response.status_code != 200: continue
             soup = BeautifulSoup(response.content, 'html.parser')
-            
+
             global_stats["buttons"] += len(soup.find_all('button'))
             global_stats["links"] += len(soup.find_all('a'))
             global_stats["images"] += len(soup.find_all('img'))
@@ -154,11 +157,11 @@ def recursive_crawl(start_url, max_pages=5):
             text_content = soup.get_text(separator=' ', strip=True)
             global_stats["words"] += len(text_content.split())
             global_stats["pages"] += 1
-            
+
             scripts = [s.get('src') for s in soup.find_all('script') if s.get('src')]
             title = soup.title.string if soup.title else "No Title"
             site_structure[url] = {"title": title, "scripts": scripts[:3]}
-            
+
             def extract_assets_internal(soup, url):
                 assets = {"fonts": [], "icons": [], "images": []}
                 for link in soup.find_all('link', href=True):
@@ -176,19 +179,21 @@ def recursive_crawl(start_url, max_pages=5):
             page_assets = extract_assets_internal(soup, url)
             all_assets['fonts'].update(page_assets['fonts'])
             all_assets['icons'].update(page_assets['icons'])
-            
+
             combined_text += f"\n\n--- PAGE: {title} ({url}) ---\nDETECTED SCRIPTS: {scripts[:5]}\nCONTENT: {text_content[:4000]}"
-            visited.add(url)
             count += 1
-            
+
             for link in soup.find_all('a', href=True):
                 href = link['href']
                 full_url = urljoin(url, href)
-                if urlparse(full_url).netloc == base_domain and full_url not in visited and full_url not in queue:
+                # O(1) lookup in seen_urls set
+                if (urlparse(full_url).netloc == base_domain and
+                        full_url not in seen_urls):
+                    seen_urls.add(full_url)
                     queue.append(full_url)
             time.sleep(0.3)
         except: pass
-            
+
     progress_bar.progress(100)
     status_text.success(f"✅ Mission Complete! Scanned {count} pages.")
     final_assets = {k: list(v) for k, v in all_assets.items()}
@@ -199,17 +204,17 @@ with st.sidebar:
     st.header("⚙️ SYSTEM CONTROL")
     api_key = st.text_input("API KEY", type="password", key="sidebar_api_key")
     st.divider()
-    
+
     model_options = [
-        "gemini-2.0-flash-exp", 
-        "gemini-3-pro-preview", 
-        "gemini-2.5-flash", 
-        "gemini-1.5-pro", 
-        "gemini-1.5-flash", 
+        "gemini-2.0-flash-exp",
+        "gemini-3-pro-preview",
+        "gemini-2.5-flash",
+        "gemini-1.5-pro",
+        "gemini-1.5-flash",
         "Custom (Type new...)"
     ]
     selected_option = st.selectbox("MODEL", model_options, key="sidebar_model_select")
-    
+
     if selected_option == "Custom (Type new...)":
         model_name = st.text_input("ENTER CUSTOM MODEL NAME", value="gemini-2.0-flash-exp", key="sidebar_custom_model")
     else:
@@ -233,17 +238,17 @@ tab1, tab2, tab3, tab4 = st.tabs(["✨ PROMPT ARCHITECT", "🕷️ DEEP NET SCAN
 # ==========================================
 with tab1:
     st.header("✨ The Architect Engine")
-    
+
     mode = st.selectbox("STRATEGY", [
-        "⚡ Vibe Coder (Bolt/Antigravity)", 
-        "🧠 Super-System (The Architect)", 
-        "✨ Auto-Detect (AI Decides)", 
-        "CO-STAR (General Writing)", 
-        "Chain of Thought (Logic)", 
-        "Senior Coder (Python/JS)", 
-        "Email Polisher", 
-        "S.M.A.R.T. (Business)", 
-        "The 5 Ws (Reporting)", 
+        "⚡ Vibe Coder (Bolt/Antigravity)",
+        "🧠 Super-System (The Architect)",
+        "✨ Auto-Detect (AI Decides)",
+        "CO-STAR (General Writing)",
+        "Chain of Thought (Logic)",
+        "Senior Coder (Python/JS)",
+        "Email Polisher",
+        "S.M.A.R.T. (Business)",
+        "The 5 Ws (Reporting)",
         "Custom Persona"
     ], key="tab1_strategy")
 
@@ -267,14 +272,14 @@ with tab1:
         complexity = st.select_slider("DEPTH", ["Standard", "Detailed", "God-Mode"], value="God-Mode", key="tab1_slider")
 
     raw_prompt = st.text_area("YOUR REQUEST", height=150, placeholder="e.g. build a to-do app...", key="tab1_input")
-    
+
     if st.button("🚀 ARCHITECT PROMPT", type="primary", key="tab1_btn"):
         if not raw_prompt:
             st.warning("Input required.")
         else:
             with st.spinner("Architecting Super-Prompt..."):
                 system_instruction = ""
-                
+
                 # CLEAN CODE PROTOCOL: Removed excessive formatting
                 formatting_rules = """
                 FORMATTING RULES:
@@ -283,7 +288,7 @@ with tab1:
                 3. Do NOT use excessive bolding (***). Only bold keys like **Role:**.
                 4. Do NOT use complex nesting. Keep it flat and readable.
                 """
-                
+
                 if mode == "⚡ Vibe Coder (Bolt/Antigravity)":
                     system_instruction = f"""
                     You are the "Vibe Coder" Architect.
@@ -291,7 +296,7 @@ with tab1:
                     FRAMEWORK: {vibe_type}
                     TASK: Write a "God-Mode" System Prompt for an AI Developer.
                     {formatting_rules}
-                    
+
                     STRICT OUTPUT STRUCTURE (Markdown):
                     # 1. Role
                     # 2. Project & Tech Stack (Invent modern stack)
@@ -308,7 +313,7 @@ with tab1:
                     INTENSITY: {complexity}
                     GOAL: Transform this into a massive, world-class "System Protocol".
                     {formatting_rules}
-                    
+
                     STRICT OUTPUT STRUCTURE (Markdown):
                     # 1. MISSION PROFILE
                     # 2. STRATEGIC PROTOCOL
@@ -335,7 +340,7 @@ with tab1:
                     system_instruction = f"Rewrite professionally using {mode}. {formatting_rules} INPUT: '{raw_prompt}'"
 
                 res = generate_with_fallback(model_name, system_instruction)
-                if res: 
+                if res:
                     render_output_console(res.text)
                     add_to_history(api_key, f"Prompt Architect ({mode})", raw_prompt, res.text)
 
@@ -344,7 +349,7 @@ with tab1:
 # ==========================================
 with tab2:
     st.header("🕷️ Deep Net Scanner")
-    
+
     if 'messages' not in st.session_state: st.session_state.messages = []
     if 'knowledge_base' not in st.session_state: st.session_state.knowledge_base = ""
     if 'scanned_url' not in st.session_state: st.session_state.scanned_url = ""
@@ -358,18 +363,18 @@ with tab2:
     if "Quick" in crawl_scope: page_limit = 5
     if "Deep" in crawl_scope: page_limit = 20
     if "Massive" in crawl_scope: page_limit = 50
-    
+
     if st.button("🕷️ INITIATE SCAN", type="primary", key="tab2_btn"):
         if not url: st.warning("URL REQUIRED")
         else:
             full_text, structure, assets, stats = recursive_crawl(url, max_pages=page_limit)
-            
+
             kb_content = f"""SOURCE URL: {url}\nSTATS: {json.dumps(stats)}\nSITE MAP: {json.dumps(structure)}\nASSETS: {json.dumps(assets)}\nCONTENT: {full_text}"""
             st.session_state.scanned_url = url
             st.session_state.global_stats = stats
             st.session_state.knowledge_base = kb_content
             st.session_state.messages = [{"role": "assistant", "content": f"**SCAN COMPLETE.** Analyzed {stats['pages']} pages. Found {stats['buttons']} buttons. Ready for queries."}]
-            
+
             add_to_history(api_key, "Web Scanner", url, f"Scanned {stats['pages']} pages. Found {len(assets['fonts'])} fonts.")
             st.rerun()
 
@@ -385,7 +390,7 @@ with tab2:
 
         st.divider()
         st.subheader(f"💬 DATA LINK: {st.session_state.scanned_url}")
-        
+
         for msg in st.session_state.messages:
             with st.chat_message(msg["role"]): st.markdown(msg["content"])
 
@@ -400,7 +405,7 @@ with tab2:
                     if response:
                         st.markdown(response.text)
                         st.session_state.messages.append({"role": "assistant", "content": response.text})
-        
+
         with st.expander("📦 RAW DATA EXPORT"):
             st.download_button("DOWNLOAD JSON", st.session_state.knowledge_base, file_name="scan_data.json")
 
@@ -421,7 +426,7 @@ with tab3:
                 img = Image.open(uploaded_file)
                 prompt = f"Act as Senior Frontend Dev. Write system prompt to build this exact UI using {stack}. Vibe: {vibe}."
                 res = generate_with_fallback(model_name, prompt, image=img)
-                if res: 
+                if res:
                     render_output_console(res.text)
                     add_to_history(api_key, "Vision Replicator", f"Image Upload: {stack}", res.text)
 
@@ -431,7 +436,7 @@ with tab3:
 with tab4:
     st.header("📜 History Archive")
     st.caption("Past generations saved locally by API Key.")
-    
+
     if st.button("🗑️ Clear My History", key="tab4_clear"):
         clear_user_history(api_key)
         st.success("History wiped.")
