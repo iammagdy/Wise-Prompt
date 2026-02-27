@@ -9,6 +9,7 @@ import time
 import os
 from datetime import datetime
 from urllib.parse import urljoin, urlparse
+from collections import deque
 
 # --- 1. PAGE CONFIG & RESPONSIVE CSS ---
 st.set_page_config(
@@ -123,7 +124,8 @@ def render_output_console(content):
 
 def recursive_crawl(start_url, max_pages=5):
     visited = set()
-    queue = [start_url]
+    queue = deque([start_url])
+    queued_urls = {start_url}  # Performance: O(1) lookup for URLs already in queue
     combined_text = ""
     site_structure = {} 
     all_assets = {"fonts": set(), "icons": set(), "images": set()}
@@ -138,11 +140,11 @@ def recursive_crawl(start_url, max_pages=5):
     
     while queue and count < max_pages:
         progress_bar.progress(min(int((count / max_pages) * 100), 99))
-        url = queue.pop(0)
+        url = queue.popleft()
         if url in visited: continue
         
         try:
-            status_text.markdown(f"**🕷️ Scanning Page {count+1}/{max_pages}:** `{url}`")
+            status_text.markdown(f"**🕷️ Scanning Page {count + 1}/{max_pages}:** `{url}`")
             response = requests.get(url, headers=headers, timeout=5)
             if response.status_code != 200: continue
             soup = BeautifulSoup(response.content, 'html.parser')
@@ -184,8 +186,10 @@ def recursive_crawl(start_url, max_pages=5):
             for link in soup.find_all('a', href=True):
                 href = link['href']
                 full_url = urljoin(url, href)
-                if urlparse(full_url).netloc == base_domain and full_url not in visited and full_url not in queue:
+                # Optimization: Check both visited AND queued_urls set for O(1) lookup
+                if urlparse(full_url).netloc == base_domain and full_url not in visited and full_url not in queued_urls:
                     queue.append(full_url)
+                    queued_urls.add(full_url)
             time.sleep(0.3)
         except: pass
             
