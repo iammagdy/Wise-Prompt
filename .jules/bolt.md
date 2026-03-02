@@ -1,0 +1,3 @@
+## 2024-05-24 - [Deep Net Scanner O(N) Array Operations Bottleneck]
+**Learning:** Using Python lists for queues in deep traversal algorithms (`queue.pop(0)` and `if url not in queue`) leads to severe O(N) performance penalties at high scale. In the `recursive_crawl` function, processing 500 pages spiked to ~133 seconds because checking if a URL was in the growing queue, and popping from the front of the list, took progressively longer.
+**Action:** Always use `collections.deque` for queues to achieve O(1) pops (`popleft()`), and maintain a companion `set` (e.g., `queued_urls`) for O(1) containment checks when uniqueness is required in the queue.
