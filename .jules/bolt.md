@@ -1,0 +1,3 @@
+## 2026-03-04 - O(N^2) Queue Processing in Web Crawler
+**Learning:** The `recursive_crawl` function previously used a list for its queue with `queue.pop(0)` (O(N)) and `full_url not in queue` (O(N)). When crawling many pages, this resulted in an O(N^2) time complexity trap that spiked execution times from milliseconds to ~25s under moderate queue load (5000+ generated links).
+**Action:** Replaced the queue with `collections.deque` for O(1) pops (`queue.popleft()`) and introduced an auxiliary `queued_urls` set for O(1) containment checks (`url not in queued_urls`). Always use `deque` and an auxiliary `set` when processing large queues with uniqueness requirements.
