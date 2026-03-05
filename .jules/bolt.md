@@ -1,0 +1,3 @@
+## 2025-03-05 - Heavy Queue Operations Bottleneck
+**Learning:** In the web crawler (`app.py`), using a standard Python `list` as a queue where URLs are popped from index 0 `queue.pop(0)` and "not in queue" checks (`not in queue`) are performed results in significant O(N) execution time spikes (e.g., jumping from milliseconds to over 13 seconds locally) when handling large numbers of links due to Python lists being an array-backed structure.
+**Action:** Replace `list` queues with `collections.deque` and `queue.popleft()` for O(1) removals. For fast "not in queue" containment lookups, manage an auxiliary `set` (e.g., `queued_urls`) alongside the queue.
