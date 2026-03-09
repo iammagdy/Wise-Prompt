@@ -121,9 +121,15 @@ def render_output_console(content):
         st.code(content, language="markdown")
         st.success("✅ Ready to Copy.")
 
+
+import collections  # noqa: E402
+
+
 def recursive_crawl(start_url, max_pages=5):
     visited = set()
-    queue = [start_url]
+    # ⚡ BOLT OPTIMIZATION: Use deque for O(1) pops and queued_urls set for O(1) membership checks
+    queue = collections.deque([start_url])
+    queued_urls = {start_url}
     combined_text = ""
     site_structure = {} 
     all_assets = {"fonts": set(), "icons": set(), "images": set()}
@@ -138,7 +144,8 @@ def recursive_crawl(start_url, max_pages=5):
     
     while queue and count < max_pages:
         progress_bar.progress(min(int((count / max_pages) * 100), 99))
-        url = queue.pop(0)
+        # ⚡ BOLT OPTIMIZATION: O(1) popleft instead of O(N) pop(0)
+        url = queue.popleft()
         if url in visited: continue
         
         try:
@@ -184,8 +191,10 @@ def recursive_crawl(start_url, max_pages=5):
             for link in soup.find_all('a', href=True):
                 href = link['href']
                 full_url = urljoin(url, href)
-                if urlparse(full_url).netloc == base_domain and full_url not in visited and full_url not in queue:
+                # ⚡ BOLT OPTIMIZATION: Reordered conditions to do fast O(1) set lookups before slow urlparse
+                if full_url not in visited and full_url not in queued_urls and urlparse(full_url).netloc == base_domain:
                     queue.append(full_url)
+                    queued_urls.add(full_url)
             time.sleep(0.3)
         except: pass
             
