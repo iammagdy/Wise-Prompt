@@ -1,0 +1,3 @@
+## 2025-02-23 - [O(1) Data Structures in recursive_crawl]
+**Learning:** In the `recursive_crawl` function, tracking queued URLs with a standard Python `list` resulted in an O(N) lookup (`full_url not in queue`) and popping from the front (`queue.pop(0)`) resulted in an O(N) shift. Combining this with expensive string parsing inside the link-extraction loop created significant execution time spikes under load.
+**Action:** Replace `list` with `collections.deque` for O(1) popping from the front. Introduce an auxiliary `queued_urls` `set` to achieve O(1) containment checks instead of checking the queue directly. Order O(1) `not in visited and not in queued_urls` lookups before executing `urlparse(url).netloc == base_domain` checks.
