@@ -9,6 +9,7 @@ import time
 import os
 from datetime import datetime
 from urllib.parse import urljoin, urlparse
+import collections  # noqa: E402
 
 # --- 1. PAGE CONFIG & RESPONSIVE CSS ---
 st.set_page_config(
@@ -123,7 +124,10 @@ def render_output_console(content):
 
 def recursive_crawl(start_url, max_pages=5):
     visited = set()
-    queue = [start_url]
+    # OPTIMIZATION: Use deque for O(1) left pops instead of O(N) list pops
+    queue = collections.deque([start_url])
+    # OPTIMIZATION: Auxiliary set for O(1) queue containment checks
+    queued_urls = {start_url}
     combined_text = ""
     site_structure = {} 
     all_assets = {"fonts": set(), "icons": set(), "images": set()}
@@ -138,7 +142,7 @@ def recursive_crawl(start_url, max_pages=5):
     
     while queue and count < max_pages:
         progress_bar.progress(min(int((count / max_pages) * 100), 99))
-        url = queue.pop(0)
+        url = queue.popleft()
         if url in visited: continue
         
         try:
@@ -184,8 +188,11 @@ def recursive_crawl(start_url, max_pages=5):
             for link in soup.find_all('a', href=True):
                 href = link['href']
                 full_url = urljoin(url, href)
-                if urlparse(full_url).netloc == base_domain and full_url not in visited and full_url not in queue:
-                    queue.append(full_url)
+                # OPTIMIZATION: Fast O(1) checks before expensive urlparse string parsing
+                if full_url not in visited and full_url not in queued_urls:
+                    if urlparse(full_url).netloc == base_domain:
+                        queue.append(full_url)
+                        queued_urls.add(full_url)
             time.sleep(0.3)
         except: pass
             

@@ -1,0 +1,3 @@
+## 2024-05-24 - [Optimize Crawler Queue Performance]
+**Learning:** In crawler benchmarks with heavy queue load, O(N) list containment (`in`) and pop operations cause significant execution time spikes (e.g., ~29s to 32s). Also, expensive string parsing like `urlparse` within loop conditionals causes delays when checking URLs unnecessarily.
+**Action:** Switch to `collections.deque` and an auxiliary `set` for lookups to reduce queue operation time to milliseconds. Also perform fast O(1) set membership checks (`url not in visited`) before executing expensive string parsing operations like `urlparse(url).netloc`.
