@@ -1,0 +1,3 @@
+## 2024-05-18 - [Web Crawler Queue Bottleneck]
+**Learning:** In the `recursive_crawl` function, the queue containment check (`full_url not in queue`) was an O(N) operation on a list. When scraping large pages with thousands of links, this operation became an O(N^2) bottleneck. Also, calling `urlparse` prior to verifying membership was extremely expensive.
+**Action:** When implementing crawlers or queues that grow rapidly, use `collections.deque` for O(1) pops and an auxiliary `set` (e.g., `queued_urls`) for O(1) containment checks. Order conditional checks so that fast set lookups (`not in visited`, `not in queued`) execute before slow string parsing (`urlparse`).
