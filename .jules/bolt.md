@@ -1,0 +1,3 @@
+## 2024-05-24 - O(N) URL Parsing Bottleneck in Web Crawler
+**Learning:** Checking string prefixes with `urlparse(url).netloc == base_domain` before checking O(1) set membership `url not in visited` causes massive CPU spike during web crawling. In Python, evaluating expensive object instantiations like `urlparse()` before simple lookups scales terribly when scanning thousands of DOM links.
+**Action:** Always place O(1) membership checks (e.g. `set` or `dict` lookups) at the front of `if` statements before any string manipulation, regex, or parsing logic. Switch lists used as queues to `collections.deque` and maintain an auxiliary `set` to allow O(1) containment checks.
