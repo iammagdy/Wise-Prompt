@@ -1,0 +1,3 @@
+## 2024-05-14 - [O(N^2) Bottleneck in Web Crawler Queue]
+**Learning:** Checking list containment (`full_url not in queue`) alongside expensive string parsing (`urlparse`) in a hot loop creates a severe O(N^2) bottleneck. In `recursive_crawl`, this caused execution time for 100 queue items to spike from ~16ms to ~5s when the queue grew to 1,000 items.
+**Action:** Always use `collections.deque` for queues and maintain an auxiliary `set` (e.g., `queued_urls`) for O(1) containment checks. Always perform O(1) checks before expensive operations like `urlparse`.
