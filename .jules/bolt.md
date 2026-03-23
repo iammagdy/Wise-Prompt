@@ -1,0 +1,3 @@
+## 2023-10-25 - [O(N) List Lookup Bottleneck in Web Crawler Queue]
+**Learning:** In crawler benchmarks with heavy queue load, O(N) list containment and pop operations cause significant execution time spikes (e.g., ~25s to 133s). Checking if a `url` is `not in queue` when `queue` is a list, and popping from the beginning (`queue.pop(0)`) is extremely slow.
+**Action:** Use `collections.deque` for the queue (for O(1) pops) and an auxiliary `set` (`queued_urls`) for O(1) queue containment checks. Additionally, perform fast O(1) set membership checks (e.g., `url not in visited`) before executing expensive string parsing operations like `urlparse(url).netloc`.
