@@ -4,8 +4,8 @@ import requests
 from bs4 import BeautifulSoup
 from PIL import Image
 import json
-import re
 import time
+import collections
 import os
 from datetime import datetime
 from urllib.parse import urljoin, urlparse
@@ -123,7 +123,8 @@ def render_output_console(content):
 
 def recursive_crawl(start_url, max_pages=5):
     visited = set()
-    queue = [start_url]
+    queue = collections.deque([start_url])
+    queued_urls = {start_url}  # Bolt: O(1) membership check
     combined_text = ""
     site_structure = {} 
     all_assets = {"fonts": set(), "icons": set(), "images": set()}
@@ -138,7 +139,7 @@ def recursive_crawl(start_url, max_pages=5):
     
     while queue and count < max_pages:
         progress_bar.progress(min(int((count / max_pages) * 100), 99))
-        url = queue.pop(0)
+        url = queue.popleft()  # Bolt: O(1) pop
         if url in visited: continue
         
         try:
@@ -184,8 +185,14 @@ def recursive_crawl(start_url, max_pages=5):
             for link in soup.find_all('a', href=True):
                 href = link['href']
                 full_url = urljoin(url, href)
-                if urlparse(full_url).netloc == base_domain and full_url not in visited and full_url not in queue:
+
+                # Bolt: Fast path (O(1)) checking before expensive urlparse
+                if full_url in visited or full_url in queued_urls:
+                    continue
+
+                if urlparse(full_url).netloc == base_domain:
                     queue.append(full_url)
+                    queued_urls.add(full_url)
             time.sleep(0.3)
         except: pass
             
