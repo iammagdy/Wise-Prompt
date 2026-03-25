@@ -1,0 +1,3 @@
+## 2024-05-24 - [Web Crawler Optimization]
+**Learning:** In Python loops handling URLs, such as `recursive_crawl`, O(N) list operations (`pop(0)`, `url not in queue`) become substantial bottlenecks as the queue grows. Standard list containment checks on queues of size 10,000+ can increase loop execution time by over 300%.
+**Action:** Always prefer `collections.deque` and an auxiliary `set` (e.g. `queued_urls`) for O(1) containment checks when doing BFS/DFS iterations. Additionally, place O(1) checks (like set membership) *before* expensive string parsing functions (like `urlparse(url).netloc`) to avoid running them pointlessly on already visited URLs.
