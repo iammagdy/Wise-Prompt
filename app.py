@@ -4,11 +4,11 @@ import requests
 from bs4 import BeautifulSoup
 from PIL import Image
 import json
-import re
 import time
 import os
 from datetime import datetime
 from urllib.parse import urljoin, urlparse
+import collections  # noqa: E402
 
 # --- 1. PAGE CONFIG & RESPONSIVE CSS ---
 st.set_page_config(
@@ -123,7 +123,8 @@ def render_output_console(content):
 
 def recursive_crawl(start_url, max_pages=5):
     visited = set()
-    queue = [start_url]
+    queue = collections.deque([start_url])  # Optimization: Use deque for O(1) pops
+    queued_urls = {start_url}  # Optimization: Use auxiliary set for O(1) containment checks
     combined_text = ""
     site_structure = {} 
     all_assets = {"fonts": set(), "icons": set(), "images": set()}
@@ -138,7 +139,7 @@ def recursive_crawl(start_url, max_pages=5):
     
     while queue and count < max_pages:
         progress_bar.progress(min(int((count / max_pages) * 100), 99))
-        url = queue.pop(0)
+        url = queue.popleft()  # Optimization: O(1) pop from front
         if url in visited: continue
         
         try:
@@ -184,8 +185,10 @@ def recursive_crawl(start_url, max_pages=5):
             for link in soup.find_all('a', href=True):
                 href = link['href']
                 full_url = urljoin(url, href)
-                if urlparse(full_url).netloc == base_domain and full_url not in visited and full_url not in queue:
+                # Optimization: O(1) set checks before expensive string parsing
+                if full_url not in visited and full_url not in queued_urls and urlparse(full_url).netloc == base_domain:
                     queue.append(full_url)
+                    queued_urls.add(full_url)
             time.sleep(0.3)
         except: pass
             
