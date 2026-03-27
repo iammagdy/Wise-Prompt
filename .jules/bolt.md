@@ -1,0 +1,3 @@
+## 2024-03-27 - [Web Crawler Queue Bottleneck]
+**Learning:** In crawler benchmarks with heavy queue load, O(N) list containment (`in queue`) and `pop(0)` operations cause significant execution time spikes (e.g., ~25s to 133s). Additionally, executing expensive string operations like `urlparse(url).netloc` before constant-time O(1) checks compounds the performance degradation.
+**Action:** Use `collections.deque` for O(1) pops and an auxiliary `set` for O(1) containment checks. Always perform fast O(1) set membership checks (e.g., `url not in visited`) before expensive parsing operations in tight loops to significantly reduce execution time.
