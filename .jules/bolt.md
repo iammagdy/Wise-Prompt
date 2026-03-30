@@ -1,0 +1,3 @@
+## 2024-05-24 - [Optimizing web crawler BFS queues in Streamlit]
+**Learning:** Using python `lists` as queues and containment checks (`queue.pop(0)` and `x in queue`) causes execution time to spike quadratically (e.g. up to 133s) under heavy queue load during deep site crawls. Calling `urlparse` strings on duplicate URLs causes significant slowdowns.
+**Action:** Always use `collections.deque` for `O(1)` popping. Use parallel `sets` to store queue content for `O(1)` containment checks. Always perform O(1) containment operations *before* executing expensive string processing such as `urlparse(url).netloc == base_domain`.
