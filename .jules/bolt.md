@@ -1,0 +1,3 @@
+## 2024-05-18 - Queue O(n) Check Spikes Crawler Execution Time
+**Learning:** In `recursive_crawl`, doing `full_url not in queue` on a standard list causes severe O(N) penalties during deep scans with many discovered links. Additionally, executing `urlparse(full_url).netloc` *before* checking containment evaluates expensive regex/string logic for every duplicate link.
+**Action:** Use an auxiliary `set()` (e.g. `queued_urls`) for O(1) containment checks. Reorder logic to perform fast `not in visited and not in queued_urls` checks *before* evaluating `urlparse`. Switch list-based queue to `collections.deque` for O(1) `popleft()`.
