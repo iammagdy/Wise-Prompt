@@ -1,0 +1,3 @@
+## 2024-05-18 - [Web Crawler Queue Bottleneck]
+**Learning:** In Python loops handling URLs, such as `recursive_crawl`, O(N) list operations like `queue.pop(0)` and `full_url not in queue` cause significant execution time spikes under load (e.g., from ~0.004s to ~12.1s with 50k items).
+**Action:** Always use `collections.deque` for O(1) pops and an auxiliary `set` (e.g., `queued_urls`) for O(1) queue containment checks. Additionally, order conditions to perform fast O(1) set membership checks (`url not in visited`) before executing expensive string parsing operations like `urlparse(url).netloc` to measurably reduce execution time.
