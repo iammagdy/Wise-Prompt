@@ -1,0 +1,3 @@
+## 2024-05-24 - [O(N) Spikes in Crawler Queue]
+**Learning:** Using a list for a queue and checking containment (`url not in queue`) leads to O(N) execution time spikes under load (e.g., from ~25s to 133s). `urlparse` string manipulation operations are also expensive and should be avoided inside loops.
+**Action:** Replace `queue = [start_url]` with `queue = collections.deque([start_url])` for O(1) pops and introduce an auxiliary `queued_urls` set for O(1) lookups. Short-circuit loops with fast O(1) set membership checks (`url not in visited`) before executing expensive operations like `urlparse(url).netloc`.
