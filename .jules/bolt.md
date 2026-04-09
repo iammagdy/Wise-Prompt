@@ -1,0 +1,3 @@
+## 2024-05-24 - O(N) Array Operations in URL Crawling
+**Learning:** In the `recursive_crawl` function, using list containment checks (`url not in queue`) and popping from the front (`queue.pop(0)`) created an O(N) bottleneck that caused execution times to spike drastically under load (e.g., from ~1s to ~110s for 1000 pages with 100 links each).
+**Action:** Always replace front-popping lists with `collections.deque` (`queue.popleft()`) for O(1) performance, and use an auxiliary `set` (`queued_urls`) for O(1) membership checks instead of searching the queue linearly. Also ensure fast set lookups (`in visited or in queued_urls`) happen before expensive string operations like `urlparse`.
