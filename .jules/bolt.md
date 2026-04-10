@@ -1,0 +1,3 @@
+## 2025-04-10 - [O(1) Queue lookups in URL crawler]
+**Learning:** In crawler benchmarks with heavy queue load, O(N) list containment and pop operations cause significant execution time spikes (e.g., ~25s to 133s). Checking `url not in queue` for a list scales linearly and pop(0) reallocates list elements. Additionally, parsing URLs (`urlparse(url).netloc`) is expensive inside a loop.
+**Action:** Switching to `collections.deque` and an auxiliary `set` for O(1) loop containment checks reduces this to milliseconds. Perform fast O(1) set membership checks (e.g., `url not in visited and url not in queued_urls`) before executing expensive string parsing operations like `urlparse(url).netloc` to measurably reduce execution time.
