@@ -1,0 +1,7 @@
+## 2024-05-14 - Python String Parsing vs Set Lookups in Loops
+**Learning:** In the `recursive_crawl` function, the `urlparse(full_url).netloc == base_domain` check was being executed on every single link found on a page, even if the link had already been visited or added to the queue. String parsing and object instantiation in Python is relatively slow. By moving the $O(1)$ set membership checks (`not in visited` and `not in queued_urls`) before the `urlparse` condition, Python short-circuits the evaluation and avoids executing `urlparse` entirely for duplicate links.
+**Action:** Always place fast $O(1)$ scalar or set membership checks before more expensive object creation or string parsing operations in Python conditionals, particularly in hot loops.
+
+## 2024-05-14 - O(N) List Operations in Queues under Load
+**Learning:** The BFS crawler used a standard Python list `queue = [start_url]` and managed the queue with `queue.pop(0)` and `if url not in queue`. `pop(0)` is $O(N)$ because it shifts all elements, and `in list` is an $O(N)$ linear scan. When a page has thousands of links, these $O(N)$ operations cause quadratic degradation and significant execution time spikes.
+**Action:** Always use `collections.deque` for $O(1)$ `popleft()` queue operations, and maintain a separate parallel `set` (e.g., `queued_urls`) for $O(1)$ containment checks to maintain consistent performance under load.
