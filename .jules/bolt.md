@@ -1,0 +1,3 @@
+## 2025-02-18 - Avoid O(N) list operations in algorithmic loops under load
+**Learning:** In web crawler loops, O(N) operations like `list.pop(0)` and checking `item in queue` can scale poorly as the queue size grows, dominating execution time. The crawler performance benchmark spiked up from milliseconds to seconds due to list operations. Using list lookups for queued items can create a performance bottleneck even when network requests are mocked out.
+**Action:** Always prefer `collections.deque` paired with an auxiliary `set` to achieve O(1) pops and O(1) containment checks when handling dynamic queues. When checking conditions in a loop, place fast set lookups (`not in visited`) before expensive string parsing (`urlparse`).
