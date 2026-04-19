@@ -1,0 +1,3 @@
+## 2024-05-19 - O(N) Array Operations in Web Crawler Queues
+**Learning:** Python lists used as queues (`pop(0)`) and for containment checks (`if url not in queue`) degrade heavily under load. In a breadth-first search like `recursive_crawl`, an O(N) containment check inside a loop parsing thousands of links causes an exponential performance spike. Furthermore, computing `urlparse` before performing simple O(1) set exclusions leads to massive overhead on rejected items.
+**Action:** Always use `collections.deque` for queues and parallel `set` structures for fast membership checks. Reorder conditional logic to place O(1) exclusions before expensive parsing functions.
