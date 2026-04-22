@@ -1,0 +1,3 @@
+## 2024-05-24 - Web Crawler BFS Queue Optimization
+**Learning:** Using standard Python lists as queues (`queue.pop(0)`) and for containment checks (`url not in queue`) inside nested loops processing many URLs leads to severe O(N^2) bottlenecks, easily consuming seconds of computation for simple breadth-first traversals on pages with many links.
+**Action:** Always use `collections.deque` for queues where elements are popped from the front. If containment checks are needed on the queue, pair the deque with an auxiliary `set` (e.g., `queued_urls`) to maintain O(1) time complexity for `in` checks. Additionally, reorder boolean checks in crawler loops to evaluate fast O(1) conditions (like set membership) *before* expensive string manipulation functions like `urlparse`.
