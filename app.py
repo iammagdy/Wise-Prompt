@@ -1,5 +1,6 @@
 import streamlit as st
 import google.generativeai as genai
+import collections
 import requests
 from bs4 import BeautifulSoup
 from PIL import Image
@@ -123,7 +124,10 @@ def render_output_console(content):
 
 def recursive_crawl(start_url, max_pages=5):
     visited = set()
-    queue = [start_url]
+    # ⚡ Bolt Optimization: Use deque for O(1) pops instead of O(n) list.pop(0)
+    queue = collections.deque([start_url])
+    # ⚡ Bolt Optimization: Use a set for O(1) existence checks instead of O(n) list checks
+    queued_urls = {start_url}
     combined_text = ""
     site_structure = {} 
     all_assets = {"fonts": set(), "icons": set(), "images": set()}
@@ -138,7 +142,7 @@ def recursive_crawl(start_url, max_pages=5):
     
     while queue and count < max_pages:
         progress_bar.progress(min(int((count / max_pages) * 100), 99))
-        url = queue.pop(0)
+        url = queue.popleft()
         if url in visited: continue
         
         try:
@@ -184,8 +188,14 @@ def recursive_crawl(start_url, max_pages=5):
             for link in soup.find_all('a', href=True):
                 href = link['href']
                 full_url = urljoin(url, href)
-                if urlparse(full_url).netloc == base_domain and full_url not in visited and full_url not in queue:
+
+                # ⚡ Bolt Optimization: Perform fast O(1) set membership checks before expensive string parsing
+                if full_url in visited or full_url in queued_urls:
+                    continue
+
+                if urlparse(full_url).netloc == base_domain:
                     queue.append(full_url)
+                    queued_urls.add(full_url)
             time.sleep(0.3)
         except: pass
             
