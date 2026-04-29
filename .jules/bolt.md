@@ -1,0 +1,3 @@
+## 2024-05-18 - [Web Crawler Optimization]
+**Learning:** In crawler benchmarks with heavy queue load, O(N) list containment and pop operations cause significant execution time spikes (e.g., ~8s to 1.3s); switching to `collections.deque` and an auxiliary `set` for lookups reduces this to milliseconds. Also, performing O(1) set checks before string parsing (`urlparse`) provides significant gains.
+**Action:** Always use `collections.deque` for FIFO queues and auxiliary sets for membership checks when scaling out loops or processing large link structures. Prioritize fast primitive evaluations before complex operations.
