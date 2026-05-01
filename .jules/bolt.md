@@ -1,0 +1,3 @@
+## 2025-02-28 - O(N) operations in Web Crawler
+**Learning:** In crawler benchmarks with heavy queue load, O(N) list containment (`in queue`) and pop (`pop(0)`) operations cause significant execution time spikes. Also, executing expensive string parsing operations like `urlparse(url).netloc` before fast O(1) set membership checks drastically hurts performance.
+**Action:** In Python loops handling URLs, such as `recursive_crawl`, use `collections.deque` for O(1) pops and an auxiliary `set` for lookups. Perform fast O(1) set membership checks (e.g., `url not in visited`) before executing expensive string parsing operations.
