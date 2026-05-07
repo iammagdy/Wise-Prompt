@@ -1,0 +1,3 @@
+## 2025-02-24 - Web Crawler Queue Optimization
+**Learning:** Using `queue.pop(0)` and `full_url not in queue` on a Python list in a web crawler loop creates an O(N^2) bottleneck that severely impacts performance under heavy queue load (taking over 100 seconds for thousands of links). Fast path string checks inside algorithmic loops should also be avoided if they compromise correctness, and expensive operations like `urlparse(url).netloc` should be deferred after O(1) set containment checks (`visited`, `queued_urls`).
+**Action:** Always use `collections.deque` and an auxiliary `set` for O(1) queue management in crawling algorithms, and structure conditions to evaluate fast native checks first.
