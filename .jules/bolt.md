@@ -1,0 +1,3 @@
+## 2024-05-11 - [Optimize crawler queue processing]
+**Learning:** In the web crawler logic (`recursive_crawl`), queue containment checks (`url not in queue`) and pop operations (`queue.pop(0)`) scale at O(N) with lists, creating severe bottlenecks during wide or deep crawls. Additionally, executing expensive string parsing operations (`urlparse().netloc`) before fast O(1) set membership checks wastes significant CPU cycles.
+**Action:** Use `collections.deque` and an auxiliary `set` for lookup when managing crawl queues. Perform fast O(1) set-membership checks before executing slow string parsing functions inside loops.
