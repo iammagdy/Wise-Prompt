@@ -1,0 +1,3 @@
+## 2024-05-13 - Optimize list operations in recursive_crawl
+**Learning:** The use of lists for queue implementation in high iteration web-crawlers produces O(N) constraints. `pop(0)` shifts all elements in memory, combined with `url in queue` which linearly scans elements. Doing this every loop is very expensive.
+**Action:** Replace `queue = []` with `queue = collections.deque()` for O(1) pops (`popleft()`), and additionally create a `set` containing queued elements (`queued_urls`) for O(1) membership checking. Also re-ordered URL checks to skip the expensive `urlparse()` using short-circuit logical operators.
