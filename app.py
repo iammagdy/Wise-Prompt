@@ -6,6 +6,7 @@ from PIL import Image
 import json
 import re
 import time
+import collections # noqa: E402
 import os
 from datetime import datetime
 from urllib.parse import urljoin, urlparse
@@ -123,7 +124,9 @@ def render_output_console(content):
 
 def recursive_crawl(start_url, max_pages=5):
     visited = set()
-    queue = [start_url]
+    # ⚡ Bolt Optimization: Use deque for O(1) pops and set for O(1) containment checks
+    queue = collections.deque([start_url])
+    queued_urls = {start_url}
     combined_text = ""
     site_structure = {} 
     all_assets = {"fonts": set(), "icons": set(), "images": set()}
@@ -138,7 +141,7 @@ def recursive_crawl(start_url, max_pages=5):
     
     while queue and count < max_pages:
         progress_bar.progress(min(int((count / max_pages) * 100), 99))
-        url = queue.pop(0)
+        url = queue.popleft()
         if url in visited: continue
         
         try:
@@ -184,8 +187,10 @@ def recursive_crawl(start_url, max_pages=5):
             for link in soup.find_all('a', href=True):
                 href = link['href']
                 full_url = urljoin(url, href)
-                if urlparse(full_url).netloc == base_domain and full_url not in visited and full_url not in queue:
+                # ⚡ Bolt Optimization: Check sets (O(1)) before expensive urlparse
+                if full_url not in visited and full_url not in queued_urls and urlparse(full_url).netloc == base_domain:
                     queue.append(full_url)
+                    queued_urls.add(full_url)
             time.sleep(0.3)
         except: pass
             
