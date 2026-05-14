@@ -1,0 +1,3 @@
+## 2024-05-14 - Queue performance bottleneck in recursive_crawl
+**Learning:** In the `recursive_crawl` function, using a list for a queue and checking `full_url not in queue` inside a loop results in O(N^2) time complexity. For large amounts of links, this makes execution significantly slower (e.g. going from seconds to hundreds of seconds under high load).
+**Action:** Replace `queue = [start_url]` with `queue = collections.deque([start_url])` to allow O(1) pops from the left side, and introduce a `queued_urls = set([start_url])` to track containment in O(1) time. Also, checking set membership (`not in visited` and `not in queued_urls`) before expensive string parsing (`urlparse`) prevents unnecessary parsing.
