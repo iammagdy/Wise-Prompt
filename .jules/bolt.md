@@ -1,0 +1,3 @@
+## 2024-05-24 - Web Crawler Queue Bottleneck
+**Learning:** In crawler algorithms with heavy queue loads (like `recursive_crawl`), O(N) list containment checks (`url not in queue`) and pop operations (`queue.pop(0)`) cause significant execution time spikes (e.g., ~14s down to ~1.3s in benchmarks). Furthermore, performing expensive operations like `urlparse(url).netloc` before O(1) set membership checks unnecessarily inflates processing time for already visited URLs.
+**Action:** Use `collections.deque` for O(1) pops and an auxiliary `set` (e.g., `queued_urls`) for O(1) containment checks. Always perform fast O(1) membership checks before expensive string parsing in tight loops.
