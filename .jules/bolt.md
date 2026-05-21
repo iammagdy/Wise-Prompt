@@ -1,0 +1,3 @@
+## 2024-05-21 - Web Crawler Queue Scale Optimization
+**Learning:** Found an O(N^2) trap in `recursive_crawl`. The implementation was doing `url = queue.pop(0)` and `full_url not in queue` on a standard list while traversing high-density link pages. In benchmarking, a single page with 50,000 links simulating BFS queue behavior took ~138s to process.
+**Action:** Always use `collections.deque` for FIFO queues in BFS implementations and maintain an auxiliary `queued_urls = set()` for O(1) tracking. Performing fast set containment checks *before* expensive string parsing like `urlparse(url).netloc` reduces compute load.
